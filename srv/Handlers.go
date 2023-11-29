@@ -31,12 +31,12 @@ func handleSession(conn quic.Connection) error {
 	fileName := string(buf[:fileNameLength])
 
 	file, openErr := os.Open(fileName)
-  if openErr != nil { 
+	if openErr != nil { 
 		conn.CloseWithError(common.INTERNAL_ERROR, openErr.Error())
 		return openErr 
 	}
-
-  defer file.Close()
+	
+	defer file.Close()
 
 	_, streamErr = io.Copy(stream, file)
 	if streamErr != nil && streamErr != io.EOF { 
