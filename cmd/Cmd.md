@@ -28,15 +28,19 @@ go run main.go
 
 The server also implements a tracer, so a log file is dopped in the `./srv`, which all events are written to.
 
+**NOTE** Enabling the tracer will have a performance impact on the server.
+
 The cli has these optional command line arguments:
 ```
 -host=string -> the remote host (default is 127.0.0.1)
 -port=string -> the port the remote host is serving from (default is 1234)
--filename=<the-file-to-transfer> (default is dummyfile)
--srcFolder=<the-source-folder-on-remote> (default is /<path-to-quic-file-transfer>/quicfiletransfer/cmd/srv)
--dstFolder=<the-destination-folder-on-local> (default is /<path-to-quic-file-transfer>/quicfiletransfer/cmd/cli)
+-filename=string -> the name of the file to be transfered (default is dummyfile)
+-srcFolder=string -> the path to the file on the remote server(default is /<path-to-quic-file-transfer>/quicfiletransfer/cmd/srv)
+-dstFolder=string -> the path to the destination folder on the local machine (default is /<path-to-quic-file-transfer>/quicfiletransfer/cmd/cli)
 -insecure=<stops-the-client-> (default is false)
 ```
+
+**NOTE** The insecure flag should only be used in development
 
 In a separate terminal window (in `./cli`), run the following to test the `50GB` file transfer (locally needs to be `insecure` connection):
 ```bash
