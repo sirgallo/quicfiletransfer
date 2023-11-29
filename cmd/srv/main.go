@@ -20,12 +20,16 @@ const ORG = "test"
 func main() {
 	var host, org, certPath, keyPath string
 	var port int
+	var enableTracer bool
 
 	flag.StringVar(&host, "host", HOST, "the host IP/domain for the quic server")
-	flag.StringVar(&org, "org", ORG, "the organization for self signed certs")
 	flag.IntVar(&port, "port", PORT, "the port tot listen on")
+	flag.StringVar(&org, "org", ORG, "the organization for self signed certs")
 	flag.StringVar(&certPath, "certPath", "", "the path to the cert. If not provided will generate self signed")
 	flag.StringVar(&keyPath, "keyPath", "", "the path the private key. If not provided will generate self signed")
+	flag.BoolVar(&enableTracer, "enableTracer", false, "enable the tracer. This creates a log file in the working directory")
+
+	flag.Parse()
 
 	var cert *tls.Certificate
 	switch {
@@ -47,7 +51,7 @@ func main() {
 			cert = &tlsCert
 	}
 
-	srvOpts := &srv.QuicServerOpts{ Host: HOST, Port: PORT, TlsCert: cert }
+	srvOpts := &srv.QuicServerOpts{ Host: host, Port: port, TlsCert: cert, EnableTracer: enableTracer }
 	server, newSrvErr := srv.NewQuicServer(srvOpts)
 	if newSrvErr != nil { log.Fatal(newSrvErr) }
 

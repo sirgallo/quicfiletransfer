@@ -26,7 +26,8 @@ func NewQuicServer(opts *QuicServerOpts) (*QuicServer, error) {
 	quicConfig := &quic.Config{ Allow0RTT: true, EnableDatagrams: true }
 
 	if opts.EnableTracer {
-		quicConfig.Tracer = func(ctx context.Context, p logging.Perspective, connID quic.ConnectionID) *logging.ConnectionTracer {
+		log.Println("enable tracer:", opts.EnableTracer)
+		tracer := func(ctx context.Context, p logging.Perspective, connID quic.ConnectionID) *logging.ConnectionTracer {
 			role := "server"
 			if p == logging.PerspectiveClient { role = "client" }
 			
@@ -36,6 +37,8 @@ func NewQuicServer(opts *QuicServerOpts) (*QuicServer, error) {
 			
 			return qlog.NewConnectionTracer(f, p, connID)
 		}
+
+		quicConfig.Tracer = tracer
 	}
 
 	udpConn, udpErr := net.ListenUDP(common.NET_PROTOCOL, &net.UDPAddr{ IP: net.ParseIP(opts.Host), Port: opts.Port })

@@ -12,10 +12,11 @@ The above will generate a `50GB` file.
 The server has these optional command line arguments:
 ```
 -host=string -> the server host (default is 127.0.0.1)
--port=string -> the port the server host is serving from (default is 1234)
+-port=int -> the port the server host is serving from (default is 1234)
 -org=string -> the organization for self signed certs (default is test)
 -certPath=string -> the path to the valid tls cert file (default is "")
--keyPath=string (default is "")
+-keyPath=string -> the path to the valid tls private key file (default is "")
+-enableTracer=bool -> enable the tracer, which will create a log file for all events (default is false)
 ```
 
 By default, if neither `certPath` or `keyPath` are provided, a self signed cert is generated.
