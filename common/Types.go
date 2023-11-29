@@ -3,6 +3,7 @@ package common
 
 const FTRANSFER_PROTO = "quic-file-transfer"
 const DEFAULT_HANDSHAKE_TIME = 3
+const MAX_FILENAME_LENGTH = 1024
 const NET_PROTOCOL = "udp4"
 
 const (

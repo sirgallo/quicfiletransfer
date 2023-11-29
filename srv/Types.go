@@ -1,9 +1,10 @@
 package srv
 
-import "crypto/tls"
-import "net/http"
+import (
+	"crypto/tls"
 
-import "github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go"
+)
 
 
 type QuicServerOpts struct {
@@ -12,12 +13,11 @@ type QuicServerOpts struct {
 	TlsCert *tls.Certificate
 	HandshakeIdleTimeout *int
 	Insecure bool
+	EnableTracer bool
 }
 
 type QuicServer struct {
 	listener *quic.Listener
-	mux *http.ServeMux
 	host string
 	port int
-	closeChan chan struct{}
 }

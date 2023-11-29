@@ -1,13 +1,15 @@
 package tls
 
-import "crypto/ecdsa"
-import "crypto/elliptic"
-import "crypto/rand"
-import "crypto/tls"
-import "crypto/x509"
-import "crypto/x509/pkix"
-import "math/big"
-import "time"
+import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
+	"time"
+)
 
 
 func GenerateTLSCert(org string) (*tls.Certificate, error) {
@@ -19,7 +21,7 @@ func GenerateTLSCert(org string) (*tls.Certificate, error) {
 
 	return &tls.Certificate{
 		Certificate: [][]byte{ certBytes },
-    PrivateKey:  privKey,
+		PrivateKey:  privKey,
 	}, nil
 }
 

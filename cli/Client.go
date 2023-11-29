@@ -1,20 +1,23 @@
 package cli
 
-import "context"
-import "crypto/tls"
-import "fmt"
-import "log"
-import "io"
-import "net"
-import "os"
-import "path/filepath"
-
-import "github.com/quic-go/quic-go"
-import "github.com/sirgallo/quicfiletransfer/common"
+import (
+	"context"
+	"crypto/tls"
+	"log"
+	"io"
+	"net"
+	"os"
+	"path/filepath"
+	"strconv"
+	"time"
+	
+	"github.com/quic-go/quic-go"
+	"github.com/sirgallo/quicfiletransfer/common"
+)
 
 
 func NewClient(opts *QuicClientOpts) (*QuicClient, error) {
-	remoteHostPort := net.JoinHostPort(opts.Host, fmt.Sprint(opts.Port))
+	remoteHostPort := net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
 	log.Printf("remote server address: %s", remoteHostPort)
 
 	return &QuicClient{ address: remoteHostPort }, nil
@@ -63,17 +66,22 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 }
 
 func (cli *QuicClient) openConnection(opts *OpenConnectionOpts) (quic.Connection, error) {
-	tlsConfig := &tls.Config{ 
-		InsecureSkipVerify: opts.Insecure,
-		NextProtos: []string{ common.FTRANSFER_PROTO }, 
-	}
+	tlsConfig := &tls.Config{ InsecureSkipVerify: opts.Insecure, NextProtos: []string{ common.FTRANSFER_PROTO }}
+	quicConfig := &quic.Config{ EnableDatagrams: true }
 
-	quicConfig := &quic.Config{}
+	udpAddr, getAddrErr := net.ResolveUDPAddr(common.NET_PROTOCOL, cli.address)
+	if getAddrErr != nil { return nil, getAddrErr }
 
-	log.Println("address in open connection:", cli.address)
-	conn, connErr := quic.DialAddr(context.Background(), cli.address, tlsConfig, quicConfig)
+	udpConn, udpErr := net.ListenUDP(common.NET_PROTOCOL, &net.UDPAddr{ Port: cli.port })
+	if udpErr != nil { return nil, udpErr }
+	
+	ctx, cancel := context.WithTimeout(context.Background(), HANDSHAKE_TIMEOUT * time.Second)
+	defer cancel()
+
+	tr := &quic.Transport{ Conn: udpConn }
+	conn, connErr := tr.Dial(ctx, udpAddr, tlsConfig, quicConfig)
 	if connErr != nil { return nil, connErr }
-
+	
 	log.Println("connection made with:", conn.RemoteAddr())
 	return conn, nil
 }

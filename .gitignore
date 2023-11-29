@@ -1,1 +1,3 @@
-./cmd/dummyfile
+cmd/cli/dummyfile
+cmd/srv/dummyfile
+cmd/srv/*.qlog

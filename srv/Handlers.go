@@ -1,13 +1,15 @@
 package srv
 
-import "context"
-import "io"
-import "log"
-import "os"
-
-import "github.com/quic-go/quic-go"
-
-import "github.com/sirgallo/quicfiletransfer/common"
+import (
+	"context"
+	"io"
+	"log"
+	"os"
+	
+	"github.com/quic-go/quic-go"
+	
+	"github.com/sirgallo/quicfiletransfer/common"
+)
 
 
 func handleSession(conn quic.Connection) error {
@@ -19,14 +21,14 @@ func handleSession(conn quic.Connection) error {
 
 	defer stream.Close()
 
-	buf := make([]byte, 1024)
-	nameAsBuff, readNameErr := stream.Read(buf)
+	buf := make([]byte, common.MAX_FILENAME_LENGTH)
+	fileNameLength, readNameErr := stream.Read(buf)
 	if readNameErr != nil { 
 		conn.CloseWithError(common.TRANSPORT_ERROR, readNameErr.Error())
 		return readNameErr 
 	}
 
-	fileName := string(buf[:nameAsBuff])
+	fileName := string(buf[:fileNameLength])
 
 	file, openErr := os.Open(fileName)
   if openErr != nil { 
