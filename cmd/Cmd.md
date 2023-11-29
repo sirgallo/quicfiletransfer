@@ -37,7 +37,7 @@ The cli has these optional command line arguments:
 -filename=string -> the name of the file to be transfered (default is dummyfile)
 -srcFolder=string -> the path to the file on the remote server(default is /<path-to-quic-file-transfer>/quicfiletransfer/cmd/srv)
 -dstFolder=string -> the path to the destination folder on the local machine (default is /<path-to-quic-file-transfer>/quicfiletransfer/cmd/cli)
--insecure=<stops-the-client-> (default is false)
+-insecure=bool -> determines if the client should verify the server's cert (default is false)
 ```
 
 **NOTE** The insecure flag should only be used in development
