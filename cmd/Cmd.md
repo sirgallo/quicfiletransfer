@@ -59,7 +59,7 @@ M2Pro, 16GB RAM, 512GB SSD
 ```
 Test (5 runs, first iteration of quic file transfer):
   send a 0 filled 50GB file from the server, with the dummy file located in its directory, to the client and its directory.
-  Measuse total time taken for the file to transfer
+  Measuse total time taken for the file to transfer.
 
 run 1: 3m28.216701209s
 run 2: 3m24.914857792s
@@ -72,4 +72,4 @@ avg => 250.21MB/s
 
 This can be improved by further tweaking. The `MTU` size option in the quic server was excluded since quic utilizes a "best path" algorithm and dynamically finds the optimum `MTU` size based on network conditions. However, initial congestion could be tweaked further as well. `0RTT` is also already implemented as well.
 
-Performance can also be improved by having the client send multiple streams asking for different chunks of the file. `QUIC` supports multiplexing multiple streams on a single connection, so this would also parallel processing of the file, potentially substantially increasing throughput.
+Performance can also be improved by having the client send multiple streams asking for different chunks of the file. `QUIC` supports multiplexing multiple streams on a single connection, so this would also enable parallel processing of the file, potentially substantially increasing throughput.
