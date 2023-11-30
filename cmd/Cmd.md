@@ -39,14 +39,13 @@ The cli has these optional command line arguments:
 -dstFolder=string -> the path to the destination folder on the local machine (default is /<path-to-quic-file-transfer>/quicfiletransfer/cmd/cli)
 -insecure=bool -> determines if the client should verify the server's cert (default is false)
 -streams=int -> the number of streams to open on the file transfer (default is 1)
--writers=int -> the number of writers to create to process the file (default is 1)
 ```
 
 **NOTE** The insecure flag should only be used in development
 
 In a separate terminal window (in `./cli`), run the following to test the `50GB` file transfer (locally needs to be `insecure` connection):
 ```bash
-go run main.go -filename=dummyfile -srcFolder=/<path-to-quic-file-transfer>/quicfiletransfer/cmd/srv -dstFolder=/<path-to-quic-file-transfer>/quicfiletransfer/cmd/cli insecure=true
+go run main.go -filename=dummyfile -srcFolder=/<path-to-quic-file-transfer>/quicfiletransfer/cmd/srv -dstFolder=/<path-to-quic-file-transfer>/quicfiletransfer/cmd/cli -insecure=true
 ```
 
 
@@ -72,6 +71,7 @@ run 5: 3m14.459741334s
 avg => 250.21MB/s
 ```
 
-This can be improved by further tweaking. The `MTU` size option in the quic server was excluded since quic utilizes a "best path" algorithm and dynamically finds the optimum `MTU` size based on network conditions. However, initial congestion could be tweaked further as well. `0RTT` is also already implemented as well.
 
-Performance can also be improved by having the client send multiple streams asking for different chunks of the file. `QUIC` supports multiplexing multiple streams on a single connection, so this would also enable parallel processing of the file, potentially substantially increasing throughput.
+**NOTE**
+
+Running tests on localhost is most likely not indictive of real world performance, and may be worse than the expected throughput for a local file transfer. This is partly due to the fact that `quic-go` is implemented in the application space and not at the kernel level, so the data transfer has to move through multiple os levels. A real world test over both short and long distance would have to be conducted to confirm this.

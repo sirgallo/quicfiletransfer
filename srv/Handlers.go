@@ -45,11 +45,11 @@ func handleStream(conn quic.Connection, stream quic.Stream) error {
 		return readPayloadErr 
 	}
 
-	concurrency := uint8(buf[0])
-	chunk := uint8(buf[1])
+	totalStreamsForFile := uint8(buf[0])
+	currentStream := uint8(buf[1])
 	fileName := string(buf[2:payloadLength])
 
-	log.Printf("filename: %s, concurrency: %d, chunk: %d", fileName, concurrency, chunk)
+	log.Printf("filename: %s, total streams for file: %d, current stream: %d", fileName, totalStreamsForFile, currentStream)
 	
 	file, openErr := os.Open(fileName)
 	if openErr != nil { 
@@ -66,10 +66,10 @@ func handleStream(conn quic.Connection, stream quic.Stream) error {
 	}
 
 	fileSize := uint64(fileStat.Size())
-	chunkSize := fileSize / uint64(concurrency)
-	startOffset := uint64(chunk) * chunkSize
+	chunkSize := fileSize / uint64(totalStreamsForFile)
+	startOffset := uint64(currentStream) * chunkSize
 
-	if fileSize % uint64(concurrency) != 0 && chunk == concurrency - 1 { chunkSize += fileSize % uint64(concurrency) }
+	if fileSize % uint64(totalStreamsForFile) != 0 && currentStream == totalStreamsForFile - 1 { chunkSize += fileSize % uint64(totalStreamsForFile) }
 
 	log.Printf("fileSize: %d, startOffset: %d, chunkSize: %d\n", fileSize, startOffset, chunkSize)
 

@@ -9,8 +9,7 @@ import  (
 )
 
 
-const STREAMS = 2
-const WRITERS = 4
+const STREAMS = 1
 
 
 func main() {
@@ -21,7 +20,7 @@ func main() {
 	if getCwdErr != nil { log.Fatal(getCwdErr) }
 
 	var host, filename, srcFolder, dstFolder string
-	var port, streams, writers int
+	var port, streams int
 	var insecure bool
 
 	flag.StringVar(&host, "host", "127.0.0.1", "the host where the remote file exists")
@@ -31,11 +30,10 @@ func main() {
 	flag.StringVar(&dstFolder, "dstFolder", cwd, "the destination folder on the local system")
 	flag.BoolVar(&insecure, "insecure", false, "whether or not to use an insecure connection")
 	flag.IntVar(&streams, "streams", STREAMS, "determine the total number of streams to launch for a connection")
-	flag.IntVar(&writers, "writers", WRITERS, "determine the total number of file writers to create")
 
 	flag.Parse()
 
-	cliOpts := &cli.QuicClientOpts{ Host: host, Port: port, Streams: uint8(streams), Writers: uint8(writers) }
+	cliOpts := &cli.QuicClientOpts{ Host: host, Port: port, Streams: uint8(streams) }
 	client, newCliErr := cli.NewClient(cliOpts)
 	if newCliErr != nil { log.Fatal(newCliErr) }
 	

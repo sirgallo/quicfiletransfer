@@ -18,44 +18,20 @@ import (
 	"github.com/quic-go/quic-go"
 
 	"github.com/sirgallo/quicfiletransfer/common"
-	"github.com/sirgallo/quicfiletransfer/common/mmap"
 	"github.com/sirgallo/quicfiletransfer/common/serialize"
-	"github.com/sirgallo/quicfiletransfer/pool"
 )
 
 
 //============================================= Client
 
 
+// NewClient
+//	Create a new quic file transfer client.
 func NewClient(opts *QuicClientOpts) (*QuicClient, error) {
 	remoteHostPort := net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
 	log.Printf("remote server address: %s", remoteHostPort)
 
-	data := atomic.Value{}
-	data.Store(mmap.MMap{})
-
-	writeChunkSize := uint64(MAX_BATCHED_WRITE_SIZE) / uint64(opts.Streams)
-	writePool := pool.NewBufferPool(writeChunkSize)
-	wcPool := NewWriteChunkPool()
-
-	cli := &QuicClient{ 
-		address: remoteHostPort,
-		data: data,
-		streams: opts.Streams,
-		writers: opts.Writers,
-		isResizing: uint64(0),
-		writeChunkSize: writeChunkSize,
-		copyMu: &sync.Mutex{},
-		signalFlushChan: make(chan bool),
-		writeChunkChan: make(chan *WriteChunk, opts.Streams),
-		writePool: writePool,
-		wcPool: wcPool,
-	}
-
-	go cli.handleFlush()
-	for range make([]uint8, cli.writers) { go cli.handleWrite() }
-
-	return cli, nil
+	return &QuicClient{ address: remoteHostPort, streams: opts.Streams, isResizing: uint64(0) }, nil
 }
 
 // StartFileTransferStream
@@ -125,41 +101,19 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 			
 			log.Printf("startOffset: %d, chunkSize: %d, stream: %d, remoteFSize: %d", startOffset, chunkSize, s, remoteFileSize)
 
-			dataLen := uint64(0)
-			offset := startOffset
-			readBuffer := make([]byte, STREAM_BUFFER_SIZE)
-			
-			writeBuffer := cli.writePool.GetBuffer()
-
-			var writeMmapWG sync.WaitGroup
-
-			for {
-				currLen, readErr := stream.Read(readBuffer)
-				if readErr == io.EOF { break }
-				if readErr != nil { 
-					conn.CloseWithError(common.INTERNAL_ERROR, readErr.Error())
-					return
-				}
-
-				if dataLen + uint64(currLen) > cli.writeChunkSize {
-					wc := cli.wcPool.GetWriteChunk()
-					wc.offset = offset
-					wc.data = writeBuffer[:dataLen]
-
-					cli.writeChunkChan <- wc
-					
-					cli.writePool.PutBuffer(writeBuffer)
-					writeBuffer = cli.writePool.GetBuffer()
-					
-					offset = offset + dataLen
-					dataLen = uint64(0)
-				} else {
-					copy(writeBuffer[dataLen:dataLen + uint64(currLen)], readBuffer[:currLen])
-					dataLen += uint64(currLen)
-				}
+			_, seekErr := cli.dstFile.Seek(int64(startOffset), 0)
+			if seekErr != nil { 
+				conn.CloseWithError(common.INTERNAL_ERROR, seekErr.Error())
+				return
 			}
 
-			writeMmapWG.Wait()
+			totBytesWritten, copyErr := io.CopyN(cli.dstFile, stream, int64(chunkSize))
+			if copyErr != nil && copyErr != io.EOF { 
+				conn.CloseWithError(common.TRANSPORT_ERROR, copyErr.Error())
+				return 
+			}
+
+			if totBytesWritten == int64(chunkSize) { log.Println("total bytes written same as chunk size:", totBytesWritten) }
 		}(uint8(s))
 	}
 
@@ -171,18 +125,12 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 	log.Println("file transfer complete, connection can now close")
 	log.Println("total elapsed time for file transfer:", elapsedTime)
 
-	mUnmapErr := cli.munmap()
-	if mUnmapErr != nil {
-		conn.CloseWithError(common.INTERNAL_ERROR, mUnmapErr.Error()) 
-		return nil, mUnmapErr 
-	}
-
 	return &dstpath, nil
 }
 
 // openConnection
 //	Open a connection to a http3 server running over quic.
-//	The DialEarly function attempts to make a connection using 0-RTT
+//	The DialEarly function attempts to make a connection using 0-RTT.
 func (cli *QuicClient) openConnection(opts *OpenConnectionOpts) (quic.Connection, error) {
 	tlsConfig := &tls.Config{ InsecureSkipVerify: opts.Insecure, NextProtos: []string{ common.FTRANSFER_PROTO }}
 	quicConfig := &quic.Config{ EnableDatagrams: true }
@@ -235,27 +183,12 @@ func (cli *QuicClient) resizeDstFile(remoteFileSize int64) error {
 
 		fSize = stat.Size()
 		if atomic.CompareAndSwapUint64(&cli.isResizing, 0, 1) {				
-			initFileErr := cli.initializeFile(remoteFileSize)
-			if initFileErr != nil { return initFileErr }
+			truncateErr := cli.dstFile.Truncate(remoteFileSize)
+			if truncateErr != nil { return truncateErr }
 			break
 		}
 
 		runtime.Gosched()
-	}
-
-	return nil
-}
-
-// handleWrite
-//	Run in a separate go routine.
-//	Utilizes "go routine pooling", which limits the total number of go routines created for async writes
-func (cli *QuicClient) handleWrite() error {
-	for wc := range cli.writeChunkChan {
-		mMap := cli.data.Load().(mmap.MMap)
-		copy(mMap[wc.offset:], wc.data)
-		cli.signalFlush()
-
-		cli.wcPool.PutWriteChunk(wc)
 	}
 
 	return nil

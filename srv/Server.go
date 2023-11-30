@@ -21,6 +21,9 @@ import (
 //============================================= Server
 
 
+// NewQuicServer
+//	Create the quic file transfer server.
+//	If tracer is enabled, a log of all events will be dumped to the directy the server is run in.
 func NewQuicServer(opts *QuicServerOpts) (*QuicServer, error) {
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{ *opts.TlsCert },
