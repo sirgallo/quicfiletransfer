@@ -34,7 +34,8 @@ func NewClient(opts *QuicClientOpts) (*QuicClient, error) {
 	data := atomic.Value{}
 	data.Store(mmap.MMap{})
 
-	writePool := pool.NewBufferPool(uint64(WRITE_SIZE))
+	writeChunkSize := uint64(MAX_BATCHED_WRITE_SIZE) / uint64(opts.Streams)
+	writePool := pool.NewBufferPool(writeChunkSize)
 	wcPool := NewWriteChunkPool()
 
 	cli := &QuicClient{ 
@@ -42,9 +43,11 @@ func NewClient(opts *QuicClientOpts) (*QuicClient, error) {
 		data: data,
 		streams: opts.Streams,
 		writers: opts.Writers,
+		isResizing: uint64(0),
+		writeChunkSize: writeChunkSize,
 		copyMu: &sync.Mutex{},
 		signalFlushChan: make(chan bool),
-		writeChunkChan: make(chan *WriteChunk, 10),
+		writeChunkChan: make(chan *WriteChunk, opts.Streams),
 		writePool: writePool,
 		wcPool: wcPool,
 	}
@@ -138,7 +141,7 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 					return
 				}
 
-				if dataLen + uint64(currLen) > uint64(WRITE_SIZE) {
+				if dataLen + uint64(currLen) > cli.writeChunkSize {
 					wc := cli.wcPool.GetWriteChunk()
 					wc.offset = offset
 					wc.data = writeBuffer[:dataLen]

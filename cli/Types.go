@@ -34,6 +34,7 @@ type QuicClient struct {
 	signalFlushChan chan bool
 	writeChunkChan chan *WriteChunk
 	isResizing uint64
+	writeChunkSize uint64
 
 	writePool *pool.BufferPool
 	wcPool *WriteChunkPool
@@ -58,5 +59,5 @@ type WriteChunkPool struct {
 
 
 const HANDSHAKE_TIMEOUT = 3
-const STREAM_BUFFER_SIZE = 1024 * 4 // 4KB
-const WRITE_SIZE = 1024 * 1024 * 500 // 500MB
+const STREAM_BUFFER_SIZE = 1024 * 2 // 2KB
+const MAX_BATCHED_WRITE_SIZE = 1024 * 1024 * 1024 // 1GB
