@@ -37,10 +37,8 @@ func NewClient(opts *QuicClientOpts) (*QuicClient, error) {
 // StartFileTransferStream
 //	Invoke a file transfer operation.
 //	The client provides the total number of streams to open.
-//	Once each stream receives a metadata response from the server, the file is resized and memory mapped.
+//	Once each stream receives a metadata response from the server, the file is resized.
 //	The streams for the client connection then receive and write the file chunks from the server to disk.
-//	Stream data is first buffered and batched in memory before being written to the mem map to avoid excessive I/O operations.
-//	Writes are flushed "optimistically", so each write attempts to flush to disk but if a current flush op is happening the flush is skipped.
 func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, filename, src, dst string) (*string, error){
 	srcPath := filepath.Join(src, filename)
 	dstpath := filepath.Join(dst, filename)
