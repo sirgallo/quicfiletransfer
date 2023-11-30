@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/logging"
@@ -17,13 +18,16 @@ import (
 )
 
 
+//============================================= Server
+
+
 func NewQuicServer(opts *QuicServerOpts) (*QuicServer, error) {
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{ *opts.TlsCert },
 		NextProtos: []string{ common.FTRANSFER_PROTO },
 	}
 
-	quicConfig := &quic.Config{ Allow0RTT: true, EnableDatagrams: true }
+	quicConfig := &quic.Config{ Allow0RTT: true, EnableDatagrams: true, KeepAlivePeriod: 3 * time.Second }
 
 	if opts.EnableTracer {
 		log.Println("enable tracer:", opts.EnableTracer)
@@ -45,24 +49,21 @@ func NewQuicServer(opts *QuicServerOpts) (*QuicServer, error) {
 	if udpErr != nil { return nil, udpErr }
 
 	tr := quic.Transport{ Conn: udpConn }
-	listener, listenQuicErr := tr.Listen(tlsConfig, quicConfig)
+	listener, listenQuicErr := tr.ListenEarly(tlsConfig, quicConfig)
 	if listenQuicErr != nil { return nil, listenQuicErr }
 
 	log.Printf("quic transport layer started for: %s", listener.Addr().String())
-
-	return &QuicServer{
-		host: opts.Host,
-		port: opts.Port,
-		listener: listener,
-	}, nil
+	return &QuicServer{ host: opts.Host, port: opts.Port, listener: listener }, nil
 }
 
+// Listen
+//	Begin accepting and processing connections from clients. This is asynchronous.
 func (srv *QuicServer) Listen() error {
 	defer srv.listener.Close()
 	
 	var listenWG sync.WaitGroup
-	listenWG.Add(1)
 	
+	listenWG.Add(1)
 	go func() {
 		defer listenWG.Done()
 		for {
@@ -73,7 +74,7 @@ func (srv *QuicServer) Listen() error {
 			}
 
 			go func () {
-				handleErr := handleSession(conn)
+				handleErr := handleConnection(conn)
 				if handleErr != nil { log.Println("error on handler:", handleErr.Error()) }
 			}()
 		}

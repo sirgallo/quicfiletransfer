@@ -12,6 +12,12 @@ import (
 )
 
 
+//============================================= TLS Self Signed Certs
+
+
+// DO NOT USE FOR PRODUCTION PURPOSES
+
+
 func GenerateTLSCert(org string) (*tls.Certificate, error) {
 	privKey, genPrivKeyErr := generatePrivateKey()
 	if genPrivKeyErr != nil { return nil, genPrivKeyErr }
@@ -19,10 +25,7 @@ func GenerateTLSCert(org string) (*tls.Certificate, error) {
 	certBytes, genSelfSignedErr := createSelfSignedCert(org, privKey)
 	if genSelfSignedErr != nil { return nil, genSelfSignedErr }
 
-	return &tls.Certificate{
-		Certificate: [][]byte{ certBytes },
-		PrivateKey:  privKey,
-	}, nil
+	return &tls.Certificate{ Certificate: [][]byte{ certBytes }, PrivateKey: privKey }, nil
 }
 
 func createSelfSignedCert(org string, privKey *ecdsa.PrivateKey) ([]byte, error) {

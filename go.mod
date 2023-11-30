@@ -2,7 +2,10 @@ module github.com/sirgallo/quicfiletransfer
 
 go 1.20
 
-require github.com/quic-go/quic-go v0.40.0
+require (
+	github.com/quic-go/quic-go v0.40.0
+	golang.org/x/sys v0.8.0
+)
 
 require (
 	github.com/francoispqt/gojay v1.2.13 // indirect
@@ -15,6 +18,5 @@ require (
 	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db // indirect
 	golang.org/x/mod v0.11.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
-	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/tools v0.9.1 // indirect
 )

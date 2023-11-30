@@ -38,6 +38,8 @@ The cli has these optional command line arguments:
 -srcFolder=string -> the path to the file on the remote server(default is /<path-to-quic-file-transfer>/quicfiletransfer/cmd/srv)
 -dstFolder=string -> the path to the destination folder on the local machine (default is /<path-to-quic-file-transfer>/quicfiletransfer/cmd/cli)
 -insecure=bool -> determines if the client should verify the server's cert (default is false)
+-streams=int -> the number of streams to open on the file transfer (default is 1)
+-writers=int -> the number of writers to create to process the file (default is 1)
 ```
 
 **NOTE** The insecure flag should only be used in development

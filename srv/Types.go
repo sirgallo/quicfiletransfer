@@ -7,17 +7,21 @@ import (
 )
 
 
+// QuicServerOpts: the options for the quic server on init
 type QuicServerOpts struct {
+	// Host: the host for server
 	Host string
+	// Port: the port the host is listening on
 	Port int
+	// TlsCert: the server certificate
 	TlsCert *tls.Certificate
-	HandshakeIdleTimeout *int
-	Insecure bool
+	// EnableTracer: adds a file logger to capture events on the http3 server
 	EnableTracer bool
 }
 
+// QuicServer: the quic server implementation
 type QuicServer struct {
-	listener *quic.Listener
+	listener *quic.EarlyListener
 	host string
 	port int
 }

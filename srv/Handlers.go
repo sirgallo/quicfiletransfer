@@ -9,27 +9,48 @@ import (
 	"github.com/quic-go/quic-go"
 	
 	"github.com/sirgallo/quicfiletransfer/common"
+	"github.com/sirgallo/quicfiletransfer/common/serialize"
 )
 
 
-func handleSession(conn quic.Connection) error {
-	stream, streamErr := conn.AcceptStream(context.Background())
-	if streamErr != nil { 
-		conn.CloseWithError(common.CONNECTION_ERROR, streamErr.Error())
-		return streamErr 
-	}
+//============================================= Server Handlers
 
+
+// handleConnection
+//	Accept multiple streams from a single connection since QUIC can multiplex streams.
+func handleConnection(conn quic.Connection) error {
+	for {
+		stream, streamErr := conn.AcceptStream(context.Background())
+		if streamErr != nil { 
+			conn.CloseWithError(common.CONNECTION_ERROR, streamErr.Error())
+			return streamErr 
+		}
+
+		go handleStream(conn, stream)
+	}
+}
+
+// handleStream
+//	For individual streams, determine the file to transfer.
+//	The server opens the file and determines the size of the chunk to send to the client.
+//	The server then sends a metadata payload to the client containing filesize, chunksize, and the start offset to process.
+//	The data from the chunk in the file is written to the stream to be received by the client.
+func handleStream(conn quic.Connection, stream quic.Stream) error {
 	defer stream.Close()
 
-	buf := make([]byte, common.MAX_FILENAME_LENGTH)
-	fileNameLength, readNameErr := stream.Read(buf)
-	if readNameErr != nil { 
-		conn.CloseWithError(common.TRANSPORT_ERROR, readNameErr.Error())
-		return readNameErr 
+	buf := make([]byte, common.CLIENT_PAYLOAD_MAX_LENGTH)
+	payloadLength, readPayloadErr := stream.Read(buf)
+	if readPayloadErr != nil { 
+		conn.CloseWithError(common.TRANSPORT_ERROR, readPayloadErr.Error())
+		return readPayloadErr 
 	}
 
-	fileName := string(buf[:fileNameLength])
+	concurrency := uint8(buf[0])
+	chunk := uint8(buf[1])
+	fileName := string(buf[2:payloadLength])
 
+	log.Printf("filename: %s, concurrency: %d, chunk: %d", fileName, concurrency, chunk)
+	
 	file, openErr := os.Open(fileName)
 	if openErr != nil { 
 		conn.CloseWithError(common.INTERNAL_ERROR, openErr.Error())
@@ -38,12 +59,47 @@ func handleSession(conn quic.Connection) error {
 	
 	defer file.Close()
 
-	_, streamErr = io.Copy(stream, file)
-	if streamErr != nil && streamErr != io.EOF { 
-		conn.CloseWithError(common.TRANSPORT_ERROR, "end of file")
-		return streamErr 
+	fileStat, statErr := file.Stat()
+	if statErr != nil {
+		conn.CloseWithError(common.INTERNAL_ERROR, openErr.Error()) 
+		return statErr
 	}
 
-	log.Println("successfully transferred file")
+	fileSize := uint64(fileStat.Size())
+	chunkSize := fileSize / uint64(concurrency)
+	startOffset := uint64(chunk) * chunkSize
+
+	if fileSize % uint64(concurrency) != 0 && chunk == concurrency - 1 { chunkSize += fileSize % uint64(concurrency) }
+
+	log.Printf("fileSize: %d, startOffset: %d, chunkSize: %d\n", fileSize, startOffset, chunkSize)
+
+	payload := func() []byte {
+		p := make([]byte, common.SERVER_PAYLOAD_MAX_LENGTH)
+		copy(p[:8], serialize.SerializeUint64(fileSize))
+		copy(p[8:16], serialize.SerializeUint64(startOffset))
+		copy(p[16:], serialize.SerializeUint64(chunkSize))
+		
+		return p
+	}()
+
+	_, writeErr := stream.Write(payload)
+	if writeErr != nil {
+		conn.CloseWithError(common.TRANSPORT_ERROR, openErr.Error()) 
+		return writeErr 
+	}
+
+	_, seekErr := file.Seek(int64(startOffset), 0)
+	if seekErr != nil { 
+		conn.CloseWithError(common.INTERNAL_ERROR, openErr.Error())
+		return seekErr
+	}
+
+	_, streamFileErr := io.CopyN(stream, file, int64(chunkSize))
+	if streamFileErr != nil && streamFileErr != io.EOF { 
+		conn.CloseWithError(common.TRANSPORT_ERROR, streamFileErr.Error())
+		return streamFileErr 
+	}
+	
+	log.Println("successfully transferred file chunk")
 	return nil
 }
