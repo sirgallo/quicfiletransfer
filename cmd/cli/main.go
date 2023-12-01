@@ -9,7 +9,7 @@ import  (
 )
 
 
-const STREAMS = 2
+const STREAMS = 1
 
 
 func main() {
