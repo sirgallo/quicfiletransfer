@@ -154,7 +154,7 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 				conn.CloseWithError(common.INTERNAL_ERROR, desErr.Error())
 				return
 			}
-			
+
 			log.Printf("startOffset: %d, chunkSize: %d\n", startOffset, chunkSize)
 
 			_, seekErr := cli.dstFile.Seek(int64(startOffset), 0)
@@ -237,11 +237,10 @@ func (cli *QuicClient) openConnection(opts *OpenConnectionOpts) (quic.Connection
 }
 
 // deserializePayload
-//	When an initial metadata payload is received from the remote server, it is deserialized from bytes.
+//	Initial metadata payload with remote filesize and md5
 //	Format:
 //		bytes 0-7: uint64 representing the size of the file
-//		bytes 8-15: uint64 representing the start offset in the file where the stream should begin processing
-//		bytes 16-23: uint64 representing the size of the chunk being received by the stream
+//		bytes: 8:24: md5 in byte format
 func (cli *QuicClient) deserializeMetaPayload(payload []byte) (uint64, []byte, error) {
 	if len(payload) != common.FILE_META_PAYLOAD_MAX_LENGTH { return 0, nil, errors.New("payload incorrect length") }
 
@@ -251,6 +250,11 @@ func (cli *QuicClient) deserializeMetaPayload(payload []byte) (uint64, []byte, e
 	return remoteFileSize, payload[8:], nil
 }
 
+// deserializeChunkPayload
+//	Metadata payload regarding chunk size and start offset in file 
+//	Format:
+//		bytes 0-7: uint64 representing the start offset in the file where the stream should begin processing
+//		bytes 8-16: uint64 representing the size of the chunk being received by the stream
 func (cli *QuicClient) deserializeChunkPayload(payload []byte) (uint64, uint64, error) {
 	if len(payload) != common.CHUNK_META_PAYLOAD_MAX_LENGTH { return 0, 0, errors.New("payload incorrect length") }
 	
