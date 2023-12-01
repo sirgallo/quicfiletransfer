@@ -58,6 +58,29 @@ go run main.go -filename=dummyfile -srcFolder=/<path-to-quic-file-transfer>/quic
 ```
 
 
+# docker
+
+`build images`
+```bash
+docker build -f Dockerfile.build -t quicdependencies .
+docker build -f Dockerfile.srv -t srv .
+docker build -f Dockerfile.srv -t cli .
+```
+
+`run`
+```bash
+docker run --net=host -p 1235:1235 -v /<directory-on-host>:/home/quiccli/files cli \
+  -filename=dummyfile \
+  -srcFolder=/home/quicsrv/files/Projects/quicfiletransfer/cmd/srv \
+  -dstFolder=/home/quiccli/files/Projects/quicfiletransfer/cmd/cli \
+  -insecure=true \
+  -checkMd5=true
+
+
+docker run --net=host -p 1234:1234 -v /<directory-on-host>:/home/quicsrv/files srv \
+  -port=1234
+```
+
 # test
 
 `system`

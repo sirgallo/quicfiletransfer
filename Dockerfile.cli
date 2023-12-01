@@ -1,0 +1,17 @@
+FROM quicdependencies as cli
+
+ENV HOME /home
+
+WORKDIR $HOME/quiccli
+
+COPY cli ./cli
+COPY cmd ./cmd
+COPY common ./common
+COPY go.mod \
+  go.sum ./
+
+RUN go build -o quiccli ./cmd/cli/main.go
+
+EXPOSE 1235
+
+ENTRYPOINT ["./quiccli"]

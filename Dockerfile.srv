@@ -1,0 +1,17 @@
+FROM quicdependencies as srv
+
+ENV HOME /home
+
+WORKDIR $HOME/quicsrv
+
+COPY srv ./srv
+COPY cmd ./cmd
+COPY common ./common
+COPY go.mod \
+  go.sum ./
+
+RUN go build -o quicsrv ./cmd/srv/main.go
+
+EXPOSE 1234
+
+ENTRYPOINT ["./quicsrv"]
