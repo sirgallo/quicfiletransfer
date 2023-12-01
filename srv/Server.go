@@ -55,7 +55,7 @@ func NewQuicServer(opts *QuicServerOpts) (*QuicServer, error) {
 	listener, listenQuicErr := tr.ListenEarly(tlsConfig, quicConfig)
 	if listenQuicErr != nil { return nil, listenQuicErr }
 
-	log.Printf("quic transport layer started for: %s", listener.Addr().String())
+	log.Printf("quic transport layer started for: %s\n", listener.Addr().String())
 	return &QuicServer{ host: opts.Host, port: opts.Port, listener: listener }, nil
 }
 

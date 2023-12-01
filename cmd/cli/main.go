@@ -9,7 +9,7 @@ import  (
 )
 
 
-const STREAMS = 1
+const STREAMS = 2
 
 
 func main() {
@@ -20,11 +20,12 @@ func main() {
 	if getCwdErr != nil { log.Fatal(getCwdErr) }
 
 	var host, filename, srcFolder, dstFolder string
-	var port, streams int
+	var port, cliport, streams int
 	var insecure bool
 
 	flag.StringVar(&host, "host", "127.0.0.1", "the host where the remote file exists")
 	flag.IntVar(&port, "port", 1234, "the port serving the file")
+	flag.IntVar(&cliport, "cliPort", 1235, "the port the client establishes udp connection on")
 	flag.StringVar(&filename, "filename", "dummyfile", "the name of the file to transfer")
 	flag.StringVar(&srcFolder, "srcFolder", homeDir, "the source folder for the file on the remote system")
 	flag.StringVar(&dstFolder, "dstFolder", cwd, "the destination folder on the local system")
@@ -33,7 +34,13 @@ func main() {
 
 	flag.Parse()
 
-	cliOpts := &cli.QuicClientOpts{ Host: host, Port: port, Streams: uint8(streams) }
+	cliOpts := &cli.QuicClientOpts{
+		RemoteHost: host,
+		RemotePort: port,
+		ClientPort: cliport,
+		Streams: uint8(streams),
+	}
+
 	client, newCliErr := cli.NewClient(cliOpts)
 	if newCliErr != nil { log.Fatal(newCliErr) }
 	

@@ -4,10 +4,17 @@ This is an example of quic client/server interaction for large files.
 
 To generate a random large file in the `cmd/srv` directory (this is our dummy service), run:
 ```bash
-dd if=/dev/zero of=dummyfile bs=1G count=50
+dd if=/dev/urandom of=dummyfile bs=1G count=50
 ```
 
-The above will generate a `50GB` file.
+The above will generate a `50GB` file, with random values.
+
+Next generate a md5hash from the file. This will be used to ensure the transferred file's integrity.
+
+The following is for macOS:
+```bash
+md5 -r dummyfile | sed 's/ dummyfile//' > dummyfile.md5
+```
 
 The server has these optional command line arguments:
 ```
@@ -26,14 +33,15 @@ To run the server (in `./srv`):
 go run main.go
 ```
 
-The server also implements a tracer, so a log file is dopped in the `./srv`, which all events are written to.
+The server also implements a tracer, so a log file is dopped in `./srv`, where all events will be written to.
 
 **NOTE** Enabling the tracer will have a performance impact on the server.
 
 The cli has these optional command line arguments:
 ```
 -host=string -> the remote host (default is 127.0.0.1)
--port=string -> the port the remote host is serving from (default is 1234)
+-port=int -> the port the remote host is serving from (default is 1234)
+-cliPort=int -> the port the client establishes udp connection on (default is 1235)
 -filename=string -> the name of the file to be transfered (default is dummyfile)
 -srcFolder=string -> the path to the file on the remote server(default is /<path-to-quic-file-transfer>/quicfiletransfer/cmd/srv)
 -dstFolder=string -> the path to the destination folder on the local machine (default is /<path-to-quic-file-transfer>/quicfiletransfer/cmd/cli)
@@ -43,7 +51,7 @@ The cli has these optional command line arguments:
 
 **NOTE** The insecure flag should only be used in development
 
-In a separate terminal window (in `./cli`), run the following to test the `50GB` file transfer (locally needs to be `insecure` connection):
+In a separate terminal window (in `./cli`), run the following to test the `50GB` file transfer (local needs to be `insecure` connection):
 ```bash
 go run main.go -filename=dummyfile -srcFolder=/<path-to-quic-file-transfer>/quicfiletransfer/cmd/srv -dstFolder=/<path-to-quic-file-transfer>/quicfiletransfer/cmd/cli -insecure=true
 ```

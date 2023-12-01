@@ -8,21 +8,21 @@ import (
 // QuicClientOpts: options on client init
 type QuicClientOpts struct {
 	// Host: the host for the remote server
-	Host string
-	// Port: the port the host is listening on
-	Port int
+	RemoteHost string
+	// RemotePort: the port for the remote server
+	RemotePort int
+	// ClientPort: the port the client starts the udp connection with
+	ClientPort int
 	// Streams: the number of streams the client should open (100 is default max)
 	Streams uint8
 }
 
 // QuicClient: the quic client implementation
 type QuicClient struct {
-	address string
-	port int
+	remoteAddress string
+	cliPort int
 	streams uint8
-
 	dstFile *os.File
-	isResizing uint64
 }
 
 // OpenConnectionOpts: options to pass when opening a new connection

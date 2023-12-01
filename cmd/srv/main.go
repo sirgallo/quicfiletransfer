@@ -8,7 +8,7 @@ import (
 
 	"github.com/sirgallo/quicfiletransfer/srv"
 
-	customtls "github.com/sirgallo/quicfiletransfer/tls"
+	customtls "github.com/sirgallo/quicfiletransfer/common/tls"
 )
 
 

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"github.com/quic-go/quic-go"
 
 	"github.com/sirgallo/quicfiletransfer/common"
+	"github.com/sirgallo/quicfiletransfer/common/md5"
 	"github.com/sirgallo/quicfiletransfer/common/serialize"
 )
 
@@ -28,10 +30,14 @@ import (
 // NewClient
 //	Create a new quic file transfer client.
 func NewClient(opts *QuicClientOpts) (*QuicClient, error) {
-	remoteHostPort := net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
-	log.Printf("remote server address: %s", remoteHostPort)
+	remoteHostPort := net.JoinHostPort(opts.RemoteHost, strconv.Itoa(opts.RemotePort))
+	log.Printf("remote server address: %s\n", remoteHostPort)
 
-	return &QuicClient{ address: remoteHostPort, streams: opts.Streams, isResizing: uint64(0) }, nil
+	return &QuicClient{ 
+		remoteAddress: remoteHostPort,
+		cliPort: opts.ClientPort,
+		streams: opts.Streams,
+	}, nil
 }
 
 // StartFileTransferStream
@@ -40,10 +46,13 @@ func NewClient(opts *QuicClientOpts) (*QuicClient, error) {
 //	Once each stream receives a metadata response from the server, the file is resized.
 //	The streams for the client connection then receive and write the file chunks from the server to disk.
 func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, filename, src, dst string) (*string, error){
+	var clientWG sync.WaitGroup
+	var createErr error
+
+	isResizing := uint64(0)
 	srcPath := filepath.Join(src, filename)
 	dstpath := filepath.Join(dst, filename)
 	
-	var createErr error
 	cli.dstFile, createErr = os.Create(dstpath)
 	if createErr != nil { return nil, createErr }
 	defer cli.dstFile.Close()
@@ -52,52 +61,101 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 	if connErr != nil { return nil, connErr }
 	defer conn.CloseWithError(common.NO_ERROR, "closing")
 
-	startTime := time.Now()
-	
-	var multiplexStreamWG sync.WaitGroup
+	commStream, openCommStreamErr := conn.OpenStream()
+	if openCommStreamErr != nil { 
+		conn.CloseWithError(common.CONNECTION_ERROR, openCommStreamErr.Error())
+		return nil, openCommStreamErr
+	}
 
-	for s := range make([]uint8, cli.streams) {
-		multiplexStreamWG.Add(1)
-		go func(s uint8) { 
-			defer multiplexStreamWG.Done()
-		
-			stream, openStreamErr := conn.OpenStream()
-			if openStreamErr != nil { 
-				conn.CloseWithError(common.CONNECTION_ERROR, openStreamErr.Error())
-				return
-			}
+	fileReq := func() []byte {
+		tags := []byte{ cli.streams }
+		return append(tags, []byte(srcPath)...)
+	}()
 
-			payload := func() []byte {
-				tags := []byte{ cli.streams, s }
-				return append(tags, []byte(srcPath)...)
-			}()
+	_, fileReqErr := commStream.Write(fileReq)
+	if fileReqErr != nil { 
+		conn.CloseWithError(common.TRANSPORT_ERROR, fileReqErr.Error())
+		return nil, fileReqErr
+	}
+
+	buf := make([]byte, common.FILE_META_PAYLOAD_MAX_LENGTH)
+	payloadLength, readPayloadErr := commStream.Read(buf)
+	if readPayloadErr != nil { 
+		conn.CloseWithError(common.TRANSPORT_ERROR, readPayloadErr.Error())
+		return nil, readPayloadErr
+	}
+
+	remoteFileSize, sourceMd5, desMetaErr := cli.deserializeMetaPayload(buf[:payloadLength])
+	if desMetaErr != nil {
+		conn.CloseWithError(common.INTERNAL_ERROR, desMetaErr.Error())
+		return nil, desMetaErr
+	}
+
+	resizeErr := cli.resizeDstFile(&isResizing, int64(remoteFileSize))
+	if resizeErr != nil {
+		conn.CloseWithError(common.INTERNAL_ERROR, resizeErr.Error())
+		return nil, resizeErr
+	}
+
+	streamStartTime := time.Now()
+
+	clientWG.Add(1)
+	go func() {
+		defer clientWG.Done()
 		
-			_, writeErr := stream.Write(payload)
-			if writeErr != nil { 
-				conn.CloseWithError(common.TRANSPORT_ERROR, writeErr.Error())
+		totBytes := uint64(0)
+		for {
+			buf := make([]byte, 8)
+			_, readErr := commStream.Read(buf)
+			if readErr == io.EOF {
+				log.Println("done") 
 				return 
 			}
 
-			buf := make([]byte, common.SERVER_PAYLOAD_MAX_LENGTH)
-			payloadLength, readPayloadErr := stream.Read(buf)
+			if readErr != nil {
+				conn.CloseWithError(common.TRANSPORT_ERROR, readErr.Error()) 
+				return 
+			}
+
+			chunkBytes, desErr := serialize.DeserializeUint64(buf)
+			if desErr != nil {
+				conn.CloseWithError(common.INTERNAL_ERROR, desErr.Error()) 
+				return 
+			}
+
+			totBytes += chunkBytes
+
+			p := float64(totBytes) / float64(remoteFileSize) * 100
+			currTime := time.Now()
+			log.Printf("total bytes received: %d, percentage of total: %f, time elapsed: %v\n", totBytes, p, currTime.Sub(streamStartTime))
+		}
+	}()
+
+	for range make([]uint8, cli.streams) {
+		sendStream, openSendStreamErr := conn.AcceptUniStream(context.Background())
+		if openSendStreamErr != nil { 
+			conn.CloseWithError(common.CONNECTION_ERROR, openSendStreamErr.Error())
+			return nil, openSendStreamErr
+		}
+
+		clientWG.Add(1)
+		go func(conn quic.Connection, sendStream quic.ReceiveStream) {
+			defer clientWG.Done()
+
+			buf := make([]byte, common.CHUNK_META_PAYLOAD_MAX_LENGTH)
+			payloadLength, readPayloadErr := sendStream.Read(buf)
 			if readPayloadErr != nil { 
 				conn.CloseWithError(common.TRANSPORT_ERROR, readPayloadErr.Error())
-				return 
+				return
 			}
-
-			remoteFileSize, startOffset, chunkSize, desErr := cli.deserializePayload(buf[:payloadLength])
+		
+			startOffset, chunkSize, desErr := cli.deserializeChunkPayload(buf[:payloadLength])
 			if desErr != nil {
 				conn.CloseWithError(common.INTERNAL_ERROR, desErr.Error())
 				return
 			}
-
-			resizeErr := cli.resizeDstFile(int64(remoteFileSize))
-			if resizeErr != nil {
-				conn.CloseWithError(common.INTERNAL_ERROR, resizeErr.Error())
-				return
-			}
 			
-			log.Printf("startOffset: %d, chunkSize: %d, stream: %d, remoteFSize: %d", startOffset, chunkSize, s, remoteFileSize)
+			log.Printf("startOffset: %d, chunkSize: %d\n", startOffset, chunkSize)
 
 			_, seekErr := cli.dstFile.Seek(int64(startOffset), 0)
 			if seekErr != nil { 
@@ -105,24 +163,52 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 				return
 			}
 
-			totBytesWritten, copyErr := io.CopyN(cli.dstFile, stream, int64(chunkSize))
+			_, copyErr := io.Copy(cli.dstFile, sendStream)
 			if copyErr != nil && copyErr != io.EOF { 
 				conn.CloseWithError(common.TRANSPORT_ERROR, copyErr.Error())
-				return 
+				return
 			}
-
-			if totBytesWritten == int64(chunkSize) { log.Println("total bytes written same as chunk size:", totBytesWritten) }
-		}(uint8(s))
+		}(conn, sendStream)
 	}
 
-	multiplexStreamWG.Wait()
+	clientWG.Wait()
 
-	endTime := time.Now()
-	elapsedTime := endTime.Sub(startTime)
+	streamEndTime := time.Now()
+	streamElapsedTime := streamEndTime.Sub(streamStartTime)
 
 	log.Println("file transfer complete, connection can now close")
-	log.Println("total elapsed time for file transfer:", elapsedTime)
+	log.Println("total elapsed time for file transfer", streamElapsedTime)
 
+	log.Println("calculating md5 checksum")
+
+	md5StartTime := time.Now()
+	
+	md5Bytes, md5Err := md5.CalculateMD5(cli.dstFile)
+	if md5Err != nil { return nil, md5Err }
+
+	md5EndTime := time.Now()
+	md5ElapsedTime := md5EndTime.Sub(md5StartTime)
+
+	log.Printf("calculated md5: %v, source md5: %v\n", md5Bytes, sourceMd5)
+	log.Println("total elapsed time for md5 calculation:", md5ElapsedTime)
+
+	if ! bytes.Equal(md5Bytes, sourceMd5) {
+		remErr := os.Remove(cli.dstFile.Name())
+		if remErr != nil { return nil, remErr }
+		return nil, errors.New("md5 checksums did not match")
+	}
+
+	md5File, createFileErr := os.Create(dstpath + ".md5")
+	if createFileErr != nil { return nil, createFileErr }
+	defer md5File.Close()
+
+	md5Hex, decodeErr := md5.DeserializeMD5ToHex(md5Bytes)
+	if decodeErr != nil { return nil, decodeErr }
+
+	_, md5WriteErr := md5File.Write([]byte(md5Hex))
+	if md5WriteErr != nil { return nil, md5WriteErr }
+
+	log.Println("md5 check passed, done")
 	return &dstpath, nil
 }
 
@@ -133,10 +219,10 @@ func (cli *QuicClient) openConnection(opts *OpenConnectionOpts) (quic.Connection
 	tlsConfig := &tls.Config{ InsecureSkipVerify: opts.Insecure, NextProtos: []string{ common.FTRANSFER_PROTO }}
 	quicConfig := &quic.Config{ EnableDatagrams: true }
 
-	udpAddr, getAddrErr := net.ResolveUDPAddr(common.NET_PROTOCOL, cli.address)
+	udpAddr, getAddrErr := net.ResolveUDPAddr(common.NET_PROTOCOL, cli.remoteAddress)
 	if getAddrErr != nil { return nil, getAddrErr }
 
-	udpConn, udpErr := net.ListenUDP(common.NET_PROTOCOL, &net.UDPAddr{ Port: cli.port })
+	udpConn, udpErr := net.ListenUDP(common.NET_PROTOCOL, &net.UDPAddr{ Port: cli.cliPort })
 	if udpErr != nil { return nil, udpErr }
 	
 	ctx, cancel := context.WithTimeout(context.Background(), HANDSHAKE_TIMEOUT * time.Second)
@@ -156,31 +242,37 @@ func (cli *QuicClient) openConnection(opts *OpenConnectionOpts) (quic.Connection
 //		bytes 0-7: uint64 representing the size of the file
 //		bytes 8-15: uint64 representing the start offset in the file where the stream should begin processing
 //		bytes 16-23: uint64 representing the size of the chunk being received by the stream
-func (cli *QuicClient) deserializePayload(payload []byte) (uint64, uint64, uint64, error) {
-	if len(payload) != common.SERVER_PAYLOAD_MAX_LENGTH { return 0, 0, 0, errors.New("payload incorrect length") }
+func (cli *QuicClient) deserializeMetaPayload(payload []byte) (uint64, []byte, error) {
+	if len(payload) != common.FILE_META_PAYLOAD_MAX_LENGTH { return 0, nil, errors.New("payload incorrect length") }
 
 	remoteFileSize, desFSizeErr := serialize.DeserializeUint64(payload[:8])
-	if desFSizeErr != nil { return 0, 0, 0, desFSizeErr }
+	if desFSizeErr != nil { return 0, nil, desFSizeErr }
 
-	startOffset, desOffsetErr := serialize.DeserializeUint64(payload[8:16])
-	if desOffsetErr != nil { return 0, 0, 0, desOffsetErr }
+	return remoteFileSize, payload[8:], nil
+}
 
-	chunkSize, desChunkSizeErr := serialize.DeserializeUint64(payload[16:])
-	if desChunkSizeErr != nil { return 0, 0, 0, desChunkSizeErr }
+func (cli *QuicClient) deserializeChunkPayload(payload []byte) (uint64, uint64, error) {
+	if len(payload) != common.CHUNK_META_PAYLOAD_MAX_LENGTH { return 0, 0, errors.New("payload incorrect length") }
+	
+	startOffset, desOffsetErr := serialize.DeserializeUint64(payload[:8])
+	if desOffsetErr != nil { return 0, 0, desOffsetErr }
 
-	return remoteFileSize, startOffset, chunkSize, nil
+	chunkSize, desChunkSizeErr := serialize.DeserializeUint64(payload[8:])
+	if desChunkSizeErr != nil { return 0, 0, desChunkSizeErr }
+
+	return startOffset, chunkSize, nil
 }
 
 // resizeDstFile
 //	When the streams receive the metadata, the file created needs to be resized to match the size of the remote file.
-func (cli *QuicClient) resizeDstFile(remoteFileSize int64) error {
+func (cli *QuicClient) resizeDstFile(isResizing *uint64, remoteFileSize int64) error {
 	fSize := int64(0)
 	for fSize != remoteFileSize {
 		stat, statErr := cli.dstFile.Stat()
 		if statErr != nil { return statErr }
 
 		fSize = stat.Size()
-		if atomic.CompareAndSwapUint64(&cli.isResizing, 0, 1) {				
+		if atomic.CompareAndSwapUint64(isResizing, 0, 1) {				
 			truncateErr := cli.dstFile.Truncate(remoteFileSize)
 			if truncateErr != nil { return truncateErr }
 			break
