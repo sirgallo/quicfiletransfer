@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"os"
+	//"os"
 )
 
 
@@ -15,6 +15,8 @@ type QuicClientOpts struct {
 	ClientPort int
 	// Streams: the number of streams the client should open (100 is default max)
 	Streams uint8
+	// CheckMD5: optionally check the md5 file to ensure validity of data
+	CheckMd5 bool
 }
 
 // QuicClient: the quic client implementation
@@ -22,7 +24,8 @@ type QuicClient struct {
 	remoteAddress string
 	cliPort int
 	streams uint8
-	dstFile *os.File
+	dstFile string
+	checkMd5 bool
 }
 
 // OpenConnectionOpts: options to pass when opening a new connection
@@ -33,3 +36,4 @@ type OpenConnectionOpts struct {
 
 
 const HANDSHAKE_TIMEOUT = 3
+// const PROGRESS_CHUNK_SIZE = 1024 * 1024 * 256 // 256MB

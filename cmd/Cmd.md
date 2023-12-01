@@ -47,13 +47,14 @@ The cli has these optional command line arguments:
 -dstFolder=string -> the path to the destination folder on the local machine (default is /<path-to-quic-file-transfer>/quicfiletransfer/cmd/cli)
 -insecure=bool -> determines if the client should verify the server's cert (default is false)
 -streams=int -> the number of streams to open on the file transfer (default is 1)
+-checkMd5=bool -> perform additional md5 check against remote md5 file (default is false)
 ```
 
 **NOTE** The insecure flag should only be used in development
 
 In a separate terminal window (in `./cli`), run the following to test the `50GB` file transfer (local needs to be `insecure` connection):
 ```bash
-go run main.go -filename=dummyfile -srcFolder=/<path-to-quic-file-transfer>/quicfiletransfer/cmd/srv -dstFolder=/<path-to-quic-file-transfer>/quicfiletransfer/cmd/cli -insecure=true
+go run main.go -filename=dummyfile -srcFolder=/<path-to-quic-file-transfer>/quicfiletransfer/cmd/srv -dstFolder=/<path-to-quic-file-transfer>/quicfiletransfer/cmd/cli -insecure=true -checkMd5=true
 ```
 
 

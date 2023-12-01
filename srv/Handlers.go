@@ -36,11 +36,11 @@ func handleConnection(conn quic.Connection) error {
 //	The server opens the file and determines the size of the chunk to send to the client.
 //	The server then sends a metadata payload to the client containing filesize, chunksize, and the start offset to process.
 //	The data from the chunk in the file is written to the stream to be received by the client.
-func handleCommStream(conn quic.Connection, stream quic.Stream) error {
-	defer stream.Close()
+func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
+	defer commStream.Close()
 
 	buf := make([]byte, common.CLIENT_PAYLOAD_MAX_LENGTH)
-	payloadLength, readPayloadErr := stream.Read(buf)
+	payloadLength, readPayloadErr := commStream.Read(buf)
 	if readPayloadErr != nil { 
 		conn.CloseWithError(common.TRANSPORT_ERROR, readPayloadErr.Error())
 		return readPayloadErr 
@@ -56,14 +56,15 @@ func handleCommStream(conn quic.Connection, stream quic.Stream) error {
 		conn.CloseWithError(common.INTERNAL_ERROR, openErr.Error())
 		return openErr 
 	}
-	
-	defer file.Close()
 
 	fileStat, statErr := file.Stat()
 	if statErr != nil {
+		file.Close()
 		conn.CloseWithError(common.INTERNAL_ERROR, openErr.Error()) 
 		return statErr
 	}
+
+	file.Close()
 
 	fileSize := uint64(fileStat.Size())
 	md5, getMd5Err := md5.ReadMD5FromFile(fileName + ".md5")
@@ -79,7 +80,7 @@ func handleCommStream(conn quic.Connection, stream quic.Stream) error {
 		return p
 	}()
 
-	_, writeMetaErr := stream.Write(metaPayload)
+	_, writeMetaErr := commStream.Write(metaPayload)
 	if writeMetaErr != nil {
 		conn.CloseWithError(common.TRANSPORT_ERROR, writeMetaErr.Error())
 		return writeMetaErr
@@ -88,17 +89,17 @@ func handleCommStream(conn quic.Connection, stream quic.Stream) error {
 	var multiplexWG sync.WaitGroup
 	for s := range make([]uint8, totalStreamsForFile) {
 		multiplexWG.Add(1)
-		go func(conn quic.Connection, commStream quic.Stream, s uint8) {
+
+		dataStream, openStreamErr := conn.OpenUniStream()
+		if openStreamErr != nil {
+			conn.CloseWithError(common.TRANSPORT_ERROR, openStreamErr.Error())
+			return openStreamErr
+		}
+
+		go func(s uint8) {
 			defer multiplexWG.Done()
-
-			dataStream, openStreamErr := conn.OpenUniStream()
-			if openStreamErr != nil {
-				conn.CloseWithError(common.TRANSPORT_ERROR, openStreamErr.Error())
-				return
-			}
-
 			defer dataStream.Close()
-		
+
 			chunkSize := fileSize / uint64(totalStreamsForFile)
 			startOffset := uint64(s) * chunkSize
 		
@@ -121,25 +122,45 @@ func handleCommStream(conn quic.Connection, stream quic.Stream) error {
 				conn.CloseWithError(common.TRANSPORT_ERROR, openErr.Error()) 
 				return 
 			}
-		
-			bufferLen := int64(STREAM_CHUNK_SIZE)
+
+			f, openChunkErr := os.OpenFile(fileName, os.O_RDONLY, 0666)
+			if openChunkErr != nil {
+				conn.CloseWithError(common.INTERNAL_ERROR, openChunkErr.Error())
+				return
+			}
+
+			defer f.Close()
+
 			totalBytesStreamed := int64(0)
-		
-			for {
-				_, seekErr := file.Seek(int64(startOffset) + totalBytesStreamed, 0)
+			for int64(chunkSize) > totalBytesStreamed {
+				_, seekErr := f.Seek(int64(startOffset) + totalBytesStreamed, 0)
 				if seekErr != nil { 
 					conn.CloseWithError(common.INTERNAL_ERROR, seekErr.Error())
 					return
 				}
 				
-				n, streamFileErr := io.CopyN(dataStream, file, bufferLen)
-				if streamFileErr == io.EOF { break }
-				if streamFileErr != nil && streamFileErr != io.EOF {
-					conn.CloseWithError(common.TRANSPORT_ERROR, streamFileErr.Error())
-					return 
+				var n int64
+				var streamFileErr error
+
+				if totalBytesStreamed + int64(STREAM_CHUNK_BUFFER_SIZE) > int64(chunkSize) {
+					n, streamFileErr = io.CopyN(dataStream, f, int64(chunkSize) - totalBytesStreamed)
+					if streamFileErr == io.EOF { break }
+					if streamFileErr != nil && streamFileErr != io.EOF {
+						conn.CloseWithError(common.TRANSPORT_ERROR, streamFileErr.Error())
+						return 
+					}
+
+					totalBytesStreamed += n
+				} else {
+					n, streamFileErr = io.CopyN(dataStream, f, int64(STREAM_CHUNK_BUFFER_SIZE))
+					if streamFileErr == io.EOF { break }
+					if streamFileErr != nil && streamFileErr != io.EOF {
+						conn.CloseWithError(common.TRANSPORT_ERROR, streamFileErr.Error())
+						return 
+					}
+			
+					totalBytesStreamed += n
 				}
-		
-				totalBytesStreamed += n
 		
 				_, writeBytesErr := commStream.Write(serialize.SerializeUint64(uint64(n)))
 				if writeBytesErr != nil {
@@ -147,11 +168,13 @@ func handleCommStream(conn quic.Connection, stream quic.Stream) error {
 					return 
 				}
 			}
-		}(conn, stream, uint8(s))
+
+			log.Println("successfully transferred chunk", s)
+		}(uint8(s))
 	}
 
 	multiplexWG.Wait()
 	
-	log.Println("successfully transferred file chunk")
+	log.Println("done")
 	return nil
 }
