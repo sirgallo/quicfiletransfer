@@ -142,25 +142,22 @@ func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
 				var n int64
 				var streamFileErr error
 
-				if totalBytesStreamed + int64(STREAM_CHUNK_BUFFER_SIZE) > int64(chunkSize) {
-					n, streamFileErr = io.CopyN(dataStream, f, int64(chunkSize) - totalBytesStreamed)
-					if streamFileErr == io.EOF { break }
-					if streamFileErr != nil && streamFileErr != io.EOF {
-						conn.CloseWithError(common.TRANSPORT_ERROR, streamFileErr.Error())
-						return 
+				copyChunk := func () int64 {
+					if totalBytesStreamed + int64(STREAM_CHUNK_BUFFER_SIZE) > int64(chunkSize) {
+						return int64(chunkSize) - totalBytesStreamed
 					}
+					
+					return int64(STREAM_CHUNK_BUFFER_SIZE)
+				}()
 
-					totalBytesStreamed += n
-				} else {
-					n, streamFileErr = io.CopyN(dataStream, f, int64(STREAM_CHUNK_BUFFER_SIZE))
-					if streamFileErr == io.EOF { break }
-					if streamFileErr != nil && streamFileErr != io.EOF {
-						conn.CloseWithError(common.TRANSPORT_ERROR, streamFileErr.Error())
-						return 
-					}
-			
-					totalBytesStreamed += n
+				n, streamFileErr = io.CopyN(dataStream, f, copyChunk)
+				if streamFileErr == io.EOF { break }
+				if streamFileErr != nil && streamFileErr != io.EOF {
+					conn.CloseWithError(common.TRANSPORT_ERROR, streamFileErr.Error())
+					return 
 				}
+
+				totalBytesStreamed += n
 		
 				_, writeBytesErr := commStream.Write(serialize.SerializeUint64(uint64(n)))
 				if writeBytesErr != nil {

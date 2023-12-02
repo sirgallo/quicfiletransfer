@@ -69,7 +69,11 @@ docker build -f Dockerfile.srv -t cli .
 
 `run`
 ```bash
-docker run --net=host -p 1235:1235 -v /<directory-on-host>:/home/quiccli/files cli \
+docker run --net=host \
+  --sysctl -w net.core.rmem_max=2500000 \
+  --sysctl -w net.core.wmem_max=2500000 \
+  -p 1235:1235 \
+  -v /<directory-on-host>:/home/quiccli/files cli \
   -filename=dummyfile \
   -srcFolder=/home/quicsrv/files/Projects/quicfiletransfer/cmd/srv \
   -dstFolder=/home/quiccli/files/Projects/quicfiletransfer/cmd/cli \
@@ -77,7 +81,11 @@ docker run --net=host -p 1235:1235 -v /<directory-on-host>:/home/quiccli/files c
   -checkMd5=true
 
 
-docker run --net=host -p 1234:1234 -v /<directory-on-host>:/home/quicsrv/files srv \
+docker run --net=host \
+  --sysctl -w net.core.rmem_max=2500000 \
+  --sysctl -w net.core.wmem_max=2500000 \
+  -p 1234:1234 \
+  -v /<directory-on-host>:/home/quicsrv/files srv \
   -port=1234
 ```
 
@@ -92,7 +100,7 @@ M2Pro, 16GB RAM, 512GB SSD
 ```
 Test (5 runs, first iteration of quic file transfer):
   send a 0 filled 50GB file from the server, with the dummy file located in its directory, to the client and its directory.
-  Measuse total time taken for the file to transfer.
+  Measure total time taken for the file to transfer.
 
 run 1: 3m28.216701209s
 run 2: 3m24.914857792s

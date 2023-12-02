@@ -60,7 +60,8 @@ func NewQuicServer(opts *QuicServerOpts) (*QuicServer, error) {
 }
 
 // Listen
-//	Begin accepting and processing connections from clients. This is asynchronous.
+//	Begin accepting and processing connections from clients.
+//	This is asynchronous.
 func (srv *QuicServer) Listen() error {
 	defer srv.listener.Close()
 	
