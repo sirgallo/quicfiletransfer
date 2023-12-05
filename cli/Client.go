@@ -225,7 +225,7 @@ func (cli *QuicClient) openConnection(opts *OpenConnectionOpts) (quic.Connection
 //	Initial metadata payload with remote filesize and md5.
 //	Format:
 //		bytes 0-7: uint64 representing the size of the file
-//		bytes: 8:24: md5 in byte format
+//		bytes 8-23: md5 in byte format
 func (cli *QuicClient) deserializeMetaPayload(payload []byte) (uint64, []byte, error) {
 	if len(payload) != common.FILE_META_PAYLOAD_MAX_LENGTH { return 0, nil, errors.New("payload incorrect length") }
 
