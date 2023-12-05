@@ -4,21 +4,26 @@ This is an example of quic client/server interaction for large files.
 
 To generate a random large file in the `cmd/srv` directory (this is our dummy service), run:
 ```bash
-dd if=/dev/urandom of=dummyfile bs=1G count=50
+dd if=/dev/urandom of=dummyfile bs=1G count=10
 ```
 
-The above will generate a `50GB` file, with random values.
+The above will generate a `10GB` file, with random values.
 
 Next generate a md5hash from the file. This will be used to ensure the transferred file's integrity.
 
-The following is for macOS:
+`macOS`:
 ```bash
 md5 -r dummyfile | sed 's/ dummyfile//' > dummyfile.md5
 ```
 
+`linux`:
+```bash
+md5sum dummyfile | awk '{print $1}' > dummyfile.md5
+```
+
 The server has these optional command line arguments:
 ```
--host=string -> the server host (default is 127.0.0.1)
+-host=string -> the server host (default is 0.0.0.0)
 -port=int -> the port the server host is serving from (default is 1234)
 -org=string -> the organization for self signed certs (default is test)
 -certPath=string -> the path to the valid tls cert file (default is "")
@@ -60,58 +65,79 @@ go run main.go -filename=dummyfile -srcFolder=/<path-to-quic-file-transfer>/quic
 
 # docker
 
-`build images`
+`build server`
 ```bash
 docker build -f Dockerfile.build -t quicdependencies .
 docker build -f Dockerfile.srv -t srv .
-docker build -f Dockerfile.srv -t cli .
 ```
 
-`run`
+`build client`
+```bash
+docker build -f Dockerfile.build -t quicdependencies .
+docker build -f Dockerfile.cli -t cli .
+```
+
+`run client`
 ```bash
 docker run --net=host \
-  --sysctl -w net.core.rmem_max=2500000 \
-  --sysctl -w net.core.wmem_max=2500000 \
+  --cpus=<n-num-cpus> \
+  --memory=<n-ram>g \
   -p 1235:1235 \
-  -v /<directory-on-host>:/home/quiccli/files cli \
+  -v /<directory-on-host-to-write-file-to>:/home/quiccli/files cli \
+  -host=<remote-host-ip> \
+  -port=<remote-host-port> \
   -filename=dummyfile \
-  -srcFolder=/home/quicsrv/files/Projects/quicfiletransfer/cmd/srv \
-  -dstFolder=/home/quiccli/files/Projects/quicfiletransfer/cmd/cli \
+  -srcFolder=/home/quicsrv/files \
+  -dstFolder=/home/quiccli/files \
   -insecure=true \
-  -checkMd5=true
+  -checkMd5=true \
+  -streams=<n-streams>
+```
 
-
+`run server`
+```bash
 docker run --net=host \
-  --sysctl -w net.core.rmem_max=2500000 \
-  --sysctl -w net.core.wmem_max=2500000 \
+  --cpus=<n-num-cpus> \
+  --memory=<n-ram>g \
   -p 1234:1234 \
-  -v /<directory-on-host>:/home/quicsrv/files srv \
-  -port=1234
-```
-
-# test
-
-`system`
-```
-Macbook Pro 2023
-M2Pro, 16GB RAM, 512GB SSD
-```
-
-```
-Test (5 runs, first iteration of quic file transfer):
-  send a 0 filled 50GB file from the server, with the dummy file located in its directory, to the client and its directory.
-  Measure total time taken for the file to transfer.
-
-run 1: 3m28.216701209s
-run 2: 3m24.914857792s
-run 3: 3m13.410814417s
-run 4: 3m21.885894583s
-run 5: 3m14.459741334s
-
-avg => 250.21MB/s
+  -v /<directory-on-host>:/home/quicsrv/files srv
 ```
 
 
-**NOTE**
+# tests
 
-Running tests on localhost is most likely not indictive of real world performance, and may be worse than the expected throughput for a local file transfer. This is partly due to the fact that `quic-go` is implemented in the application space and not at the kernel level, so the data transfer has to move through multiple os levels. A real world test over both short and long distance would have to be conducted to confirm this.
+## remote
+
+`system - both server and client`
+```
+48 cores, 32GB RAM, 11T SSD
+```
+
+```
+Test (3 runs, 2 streams):
+
+rsync:
+  run 1: 3m37s - 46.08 MB/s
+  run 2: 3m40s - 45.45 MB/s
+  run 3: 3m34s - 46.54 MB/s
+
+quic:
+  run 1: 1m17s - 129.87 MB/s
+  run 2: 1m13s - 136.99 MB/s
+  run 3: 1m14s - 135.14 MB/s
+
+rsync avg => 46.02 MB/s
+quic avg => 134 MB/s
+
+quic file transfer over 2.91x rsync for 10GB file
+```
+
+
+# Note
+
+**on linux, the udp receive buffer size may need to be increased for better performance**
+
+```bash
+sysctl -w net.core.rmem_max=2500000
+sysctl -w net.core.wmem_max=2500000
+```

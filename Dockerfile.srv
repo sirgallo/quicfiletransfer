@@ -1,7 +1,5 @@
 FROM quicdependencies as srv
 
-ENV HOME /home
-
 WORKDIR $HOME/quicsrv
 
 COPY srv ./srv

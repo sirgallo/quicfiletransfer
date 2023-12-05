@@ -1,4 +1,7 @@
 FROM golang:1.20 as quicdependencies
 
+ENV QUIC_GO_DISABLE_ECN=true
+ENV HOME /home
+
 RUN apt-get update && \
   apt-get install -y openssl libssl-dev

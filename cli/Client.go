@@ -164,10 +164,23 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 				return
 			}
 	
-			_, copyErr := io.CopyN(f, dataStream, int64(chunkSize))
-			if copyErr != nil && copyErr != io.EOF { 
-				conn.CloseWithError(common.TRANSPORT_ERROR, copyErr.Error())
-				return
+			writeBuffer := make([]byte, WRITE_BUFFER_SIZE)
+			totalBytesRead := 0
+
+			for int(chunkSize) > totalBytesRead {
+				nRead, readErr := io.ReadFull(dataStream, writeBuffer)
+				if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
+					conn.CloseWithError(common.TRANSPORT_ERROR, readErr.Error())
+					return
+				}
+
+				nWritten, writeErr := f.Write(writeBuffer[:nRead])
+				if writeErr != nil {
+					conn.CloseWithError(common.INTERNAL_ERROR, writeErr.Error())
+					return
+				}
+
+				totalBytesRead += nWritten
 			}
 		}()
 	}
@@ -264,6 +277,8 @@ func (cli *QuicClient) resizeDstFile(isResizing *uint64, remoteFileSize int64) e
 	return nil
 }
 
+// performMd5Check
+//	Optionally perform and md5 check on the transferred file.
 func (cli *QuicClient) performMd5Check(sourceMd5 []byte) (*string, error){
 	md5StartTime := time.Now()
 	log.Println("calculating md5 checksum")

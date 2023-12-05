@@ -11,7 +11,7 @@ A client attempts to make a connection to a host running the server implementati
 
 [0RTT](https://http3-explained.haxx.se/en/quic/quic-0rtt) has also been enabled, which reduces the number of handshakes needed to make a secure connection.
 
-A `MD5` checksum is calculated as well for the transferred file to verify that the content is the same as the source file. The server provides its own `MD5` for comparison once the file is written.
+An optional `MD5` checksum can be calculated as well for the transferred file to verify that the content is the same as the source file. The server provides its own `MD5` for comparison once the file is written. However, this would only be an additional level of redundancy as `quic` has a reliability guarantee already built into the protocol.
 
 
 ## cmd

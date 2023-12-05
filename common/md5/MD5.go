@@ -1,13 +1,16 @@
 package md5
 
 import (
+	"crypto/md5"
 	"encoding/hex"
 	"errors"
-	"crypto/md5"
 	"io"
 	"os"
-	"strings"
+	"regexp"
 )
+
+
+//============================================= MD5
 
 
 // CalculateMD5
@@ -38,7 +41,9 @@ func DeserializeMD5ToHex(input []byte) (string, error) {
 //	Transform a string representation of MD5Checksum to byte array.
 //	For transferring on the wire.
 func SerializeMD5ToBytes(input string) ([]byte, error) {
-	md5 := strings.ReplaceAll(input, "\n", "")
+	controlCharRegex := regexp.MustCompile(`[\x00-\x1F\x7F]`)
+	md5 := controlCharRegex.ReplaceAllLiteralString(input, "")
+
 	md5Bytes, decodeErr := hex.DecodeString(md5)
 	if decodeErr != nil { return nil, decodeErr }
 

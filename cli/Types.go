@@ -1,9 +1,5 @@
 package cli
 
-import (
-	//"os"
-)
-
 
 // QuicClientOpts: options on client init
 type QuicClientOpts struct {
@@ -36,4 +32,4 @@ type OpenConnectionOpts struct {
 
 
 const HANDSHAKE_TIMEOUT = 3
-// const PROGRESS_CHUNK_SIZE = 1024 * 1024 * 256 // 256MB
+const WRITE_BUFFER_SIZE = 1024 * 1024 * 8 // 8MB

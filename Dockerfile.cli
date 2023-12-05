@@ -1,7 +1,5 @@
 FROM quicdependencies as cli
 
-ENV HOME /home
-
 WORKDIR $HOME/quiccli
 
 COPY cli ./cli

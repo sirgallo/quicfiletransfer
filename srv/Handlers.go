@@ -14,7 +14,9 @@ import (
 	"github.com/sirgallo/quicfiletransfer/common/serialize"
 )
 
+
 //============================================= Server Handlers
+
 
 // handleConnection
 //	Accept multiple streams from a single connection since QUIC can multiplex streams.
@@ -60,7 +62,7 @@ func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
 	fileStat, statErr := file.Stat()
 	if statErr != nil {
 		file.Close()
-		conn.CloseWithError(common.INTERNAL_ERROR, openErr.Error()) 
+		conn.CloseWithError(common.INTERNAL_ERROR, openErr.Error())
 		return statErr
 	}
 
@@ -68,7 +70,10 @@ func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
 
 	fileSize := uint64(fileStat.Size())
 	md5, getMd5Err := md5.ReadMD5FromFile(fileName + ".md5")
-	if getMd5Err != nil { return getMd5Err }
+	if getMd5Err != nil {
+		conn.CloseWithError(common.INTERNAL_ERROR, getMd5Err.Error())
+		return getMd5Err 
+	}
 
 	log.Printf("fileSize: %d\n", fileSize)
 
