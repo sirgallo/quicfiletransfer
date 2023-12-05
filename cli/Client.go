@@ -46,10 +46,11 @@ func NewClient(opts *QuicClientOpts) (*QuicClient, error) {
 //	The client provides the total number of streams to open.
 //	Once each stream receives a metadata response from the server, the file is resized.
 //	The streams for the client connection then receive and write the file chunks from the server to disk.
-func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, filename, src, dst string) (*string, error){
-	var clientWG sync.WaitGroup
-
+func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, filename, src, dst string) (*string, error) {
 	isResizing := uint64(0)
+	totReadBytes := uint64(0)
+	signalProgress := make(chan bool)
+
 	srcPath := filepath.Join(src, filename)
 	cli.dstFile = filepath.Join(dst, filename)
 	
@@ -68,7 +69,7 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 	}
 
 	fileReq := func() []byte {
-		tags := []byte{ cli.streams }
+		tags := []byte{ cli.streams, serialize.SerializeBool(cli.checkMd5) }
 		return append(tags, []byte(srcPath)...)
 	}()
 
@@ -99,35 +100,20 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 
 	streamStartTime := time.Now()
 
+	var clientWG sync.WaitGroup
+
 	clientWG.Add(1)
 	go func() {
 		defer clientWG.Done()
-		
-		totBytes := uint64(0)
-		for {
-			buf := make([]byte, 8)
-			_, readErr := commStream.Read(buf)
-			if readErr == io.EOF {
-				log.Println("done") 
-				return 
+		var lastP float64
+		for range signalProgress {
+			currTotRead := atomic.LoadUint64(&totReadBytes)
+			p := (float64(currTotRead) / float64(remoteFileSize)) * 100
+
+			if p >= lastP + 5 || p >= 100 {
+				currTime := time.Now()
+				log.Printf("total bytes received: %d, percentage of total: %f, time elapsed: %v\n", currTotRead, p, currTime.Sub(streamStartTime))
 			}
-
-			if readErr != nil {
-				conn.CloseWithError(common.TRANSPORT_ERROR, readErr.Error()) 
-				return 
-			}
-
-			chunkBytes, desErr := serialize.DeserializeUint64(buf)
-			if desErr != nil {
-				conn.CloseWithError(common.INTERNAL_ERROR, desErr.Error()) 
-				return 
-			}
-
-			totBytes += chunkBytes
-
-			p := (float64(totBytes) / float64(remoteFileSize)) * 100
-			currTime := time.Now()
-			log.Printf("total bytes received: %d, percentage of total: %f, time elapsed: %v\n", totBytes, p, currTime.Sub(streamStartTime))
 		}
 	}()
 
@@ -164,14 +150,20 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 				return
 			}
 	
-			writeBuffer := make([]byte, WRITE_BUFFER_SIZE)
-			totalBytesRead := 0
+			writeBuffer := make([]byte, common.MAX_S_REC_WINDOW)
+			totBytesOfChunkRead := 0
 
-			for int(chunkSize) > totalBytesRead {
+			for int(chunkSize) > totBytesOfChunkRead {
 				nRead, readErr := io.ReadFull(dataStream, writeBuffer)
 				if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
 					conn.CloseWithError(common.TRANSPORT_ERROR, readErr.Error())
 					return
+				}
+
+				atomic.AddUint64(&totReadBytes, uint64(nRead))
+				select {
+					case signalProgress <- true:
+					default:
 				}
 
 				nWritten, writeErr := f.Write(writeBuffer[:nRead])
@@ -180,7 +172,7 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 					return
 				}
 
-				totalBytesRead += nWritten
+				totBytesOfChunkRead += nWritten
 			}
 		}()
 	}
@@ -192,6 +184,9 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 
 	log.Println("file transfer complete, connection can now close")
 	log.Println("total elapsed time for file transfer", streamElapsedTime)
+	log.Printf("transfer speed: %dMB/s\n", func() int {
+		return (int(remoteFileSize) / 1024 * 1024) / int(streamElapsedTime.Seconds())
+	}())
 
 	if cli.checkMd5 { return cli.performMd5Check(sourceMd5) }
 	return &cli.dstFile, nil
@@ -202,7 +197,11 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 //	The DialEarly function attempts to make a connection using 0-RTT.
 func (cli *QuicClient) openConnection(opts *OpenConnectionOpts) (quic.Connection, error) {
 	tlsConfig := &tls.Config{ InsecureSkipVerify: opts.Insecure, NextProtos: []string{ common.FTRANSFER_PROTO }}
-	quicConfig := &quic.Config{ EnableDatagrams: true }
+	quicConfig := &quic.Config{
+		InitialStreamReceiveWindow: common.INITIAL_S_REC_WINDOW,
+		MaxStreamReceiveWindow: common.MAX_S_REC_WINDOW,
+		EnableDatagrams: true,
+	}
 
 	udpAddr, getAddrErr := net.ResolveUDPAddr(common.NET_PROTOCOL, cli.remoteAddress)
 	if getAddrErr != nil { return nil, getAddrErr }
@@ -210,7 +209,7 @@ func (cli *QuicClient) openConnection(opts *OpenConnectionOpts) (quic.Connection
 	udpConn, udpErr := net.ListenUDP(common.NET_PROTOCOL, &net.UDPAddr{ Port: cli.cliPort })
 	if udpErr != nil { return nil, udpErr }
 	
-	ctx, cancel := context.WithTimeout(context.Background(), HANDSHAKE_TIMEOUT * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), common.DEFAULT_HANDSHAKE_TIME * time.Second)
 	defer cancel()
 
 	tr := &quic.Transport{ Conn: udpConn }

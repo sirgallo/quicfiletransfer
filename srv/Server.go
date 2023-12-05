@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/logging"
@@ -30,13 +29,17 @@ func NewQuicServer(opts *QuicServerOpts) (*QuicServer, error) {
 		NextProtos: []string{ common.FTRANSFER_PROTO },
 	}
 
-	quicConfig := &quic.Config{ Allow0RTT: true, EnableDatagrams: true, KeepAlivePeriod: 3 * time.Second }
+	quicConfig := &quic.Config{
+		InitialStreamReceiveWindow: common.INITIAL_S_REC_WINDOW,
+		MaxStreamReceiveWindow: common.MAX_S_REC_WINDOW,
+		Allow0RTT: true, EnableDatagrams: true, 
+		KeepAlivePeriod: common.DEFAULT_HANDSHAKE_TIME,
+	}
 
 	if opts.EnableTracer {
 		log.Println("enable tracer:", opts.EnableTracer)
 		tracer := func(ctx context.Context, p logging.Perspective, connID quic.ConnectionID) *logging.ConnectionTracer {
 			role := "server"
-			if p == logging.PerspectiveClient { role = "client" }
 			
 			filename := fmt.Sprintf("./log_%s_%s.qlog", connID, role)
 			f, createErr := os.Create(filename)

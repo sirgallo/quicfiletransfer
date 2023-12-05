@@ -49,7 +49,8 @@ func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
 	}
 
 	totalStreamsForFile := uint8(buf[0])
-	fileName := string(buf[1:payloadLength])
+	checkMd5 := serialize.DeserializeBool(buf[1])
+	fileName := string(buf[2:payloadLength])
 
 	log.Printf("filename: %s, total streams for file: %d\n", fileName, totalStreamsForFile)
 	
@@ -69,18 +70,22 @@ func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
 	file.Close()
 
 	fileSize := uint64(fileStat.Size())
-	md5, getMd5Err := md5.ReadMD5FromFile(fileName + ".md5")
-	if getMd5Err != nil {
-		conn.CloseWithError(common.INTERNAL_ERROR, getMd5Err.Error())
-		return getMd5Err 
-	}
+	var md5Bytes []byte 
+	var getMd5Err error 
+	if checkMd5 {
+		md5Bytes, getMd5Err = md5.ReadMD5FromFile(fileName + ".md5")
+		if getMd5Err != nil {
+			conn.CloseWithError(common.INTERNAL_ERROR, getMd5Err.Error())
+			return getMd5Err 
+		}
+	} else { md5Bytes = common.DEFAULT_MD5_PAYLOAD }
 
 	log.Printf("fileSize: %d\n", fileSize)
 
 	metaPayload := func() []byte {
 		p := make([]byte, common.FILE_META_PAYLOAD_MAX_LENGTH)
 		copy(p[:8], serialize.SerializeUint64(fileSize))
-		copy(p[8:], md5)
+		copy(p[8:], md5Bytes)
 
 		return p
 	}()
@@ -136,39 +141,29 @@ func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
 
 			defer f.Close()
 
-			totalBytesStreamed := int64(0)
-			for int64(chunkSize) > totalBytesStreamed {
-				_, seekErr := f.Seek(int64(startOffset) + totalBytesStreamed, 0)
+			writeBuffer := make([]byte, common.INITIAL_S_REC_WINDOW)
+			totalBytesStreamed := 0
+			
+			for int(chunkSize) > totalBytesStreamed {
+				_, seekErr := f.Seek(int64(startOffset) + int64(totalBytesStreamed), 0)
 				if seekErr != nil { 
 					conn.CloseWithError(common.INTERNAL_ERROR, seekErr.Error())
 					return
 				}
 				
-				var n int64
-				var streamFileErr error
+				nRead, readChunkErr := io.ReadFull(f, writeBuffer)
+				if readChunkErr != nil && readChunkErr != io.EOF && readChunkErr != io.ErrUnexpectedEOF {
+					conn.CloseWithError(common.INTERNAL_ERROR, readChunkErr.Error())
+					return
+				}
 
-				copyChunk := func () int64 {
-					if totalBytesStreamed + int64(STREAM_CHUNK_BUFFER_SIZE) > int64(chunkSize) {
-						return int64(chunkSize) - totalBytesStreamed
-					}
-					
-					return int64(STREAM_CHUNK_BUFFER_SIZE)
-				}()
-
-				n, streamFileErr = io.CopyN(dataStream, f, copyChunk)
-				if streamFileErr == io.EOF { break }
-				if streamFileErr != nil && streamFileErr != io.EOF {
-					conn.CloseWithError(common.TRANSPORT_ERROR, streamFileErr.Error())
+				nWritten, writeFDataErr := dataStream.Write(writeBuffer[:nRead])
+				if writeFDataErr != nil { 
+					conn.CloseWithError(common.TRANSPORT_ERROR, writeFDataErr.Error())
 					return 
 				}
 
-				totalBytesStreamed += n
-		
-				_, writeBytesErr := commStream.Write(serialize.SerializeUint64(uint64(n)))
-				if writeBytesErr != nil {
-					conn.CloseWithError(common.TRANSPORT_ERROR, writeBytesErr.Error()) 
-					return 
-				}
+				totalBytesStreamed += nWritten
 			}
 
 			log.Println("successfully transferred chunk", s)

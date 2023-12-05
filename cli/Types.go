@@ -29,7 +29,3 @@ type OpenConnectionOpts struct {
 	// Insecure: tells the client to not verify server certs. Should only be used for testing
 	Insecure bool
 }
-
-
-const HANDSHAKE_TIMEOUT = 3
-const WRITE_BUFFER_SIZE = 1024 * 1024 * 8 // 8MB

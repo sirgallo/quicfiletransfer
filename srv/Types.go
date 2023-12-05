@@ -26,4 +26,5 @@ type QuicServer struct {
 	port int
 }
 
+const INITIAL_STREAM_CHUNK_SIZE = 1024 * 512 // 512KiB
 const STREAM_CHUNK_BUFFER_SIZE = 1024 * 1024 * 2 // 2KiB

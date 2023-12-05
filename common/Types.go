@@ -1,12 +1,19 @@
 package common 
 
+import (
+	"time"
+)
 
+const DEFAULT_HANDSHAKE_TIME = 3 * time.Second
 const FTRANSFER_PROTO = "quic-file-transfer"
-const DEFAULT_HANDSHAKE_TIME = 3
+const INITIAL_S_REC_WINDOW = 1024 * 512 // 512KiB
+const MAX_S_REC_WINDOW = 1024 * 1024 * 6 // 6MB
+
 const MAX_FILENAME_LENGTH = 1024
-const CLIENT_PAYLOAD_MAX_LENGTH = MAX_FILENAME_LENGTH + 1
+const CLIENT_PAYLOAD_MAX_LENGTH = MAX_FILENAME_LENGTH + 2
 const FILE_META_PAYLOAD_MAX_LENGTH = 24
 const CHUNK_META_PAYLOAD_MAX_LENGTH = 16
+
 const NET_PROTOCOL = "udp4"
 
 const (
@@ -15,3 +22,8 @@ const (
 	CONNECTION_ERROR = 0x2
 	TRANSPORT_ERROR = 0x3
 )
+
+var DEFAULT_MD5_PAYLOAD = []byte{ 
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+}
