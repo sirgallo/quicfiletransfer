@@ -6,9 +6,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/sirgallo/quicfiletransfer/srv"
-
-	customtls "github.com/sirgallo/quicfiletransfer/common/tls"
+	"github.com/sirgallo/quicfiletransfer/internal/srv"
+	customtls "github.com/sirgallo/quicfiletransfer/internal/common/tls"
 )
 
 
@@ -18,6 +17,8 @@ const ORG = "test"
 
 
 func main() {
+	var err error
+	var cert *tls.Certificate
 	var host, org, certPath, keyPath string
 	var port int
 	var enableTracer bool
@@ -31,31 +32,28 @@ func main() {
 
 	flag.Parse()
 
-	var cert *tls.Certificate
 	switch {
 		case certPath == "" || keyPath == "":
-			srvSelfSigned, genSrvCertErr := customtls.GenerateTLSCert(ORG)
-			if genSrvCertErr != nil { log.Fatal(genSrvCertErr) }
-	
+			srvSelfSigned, err := customtls.GenerateTLSCert(ORG)
+			if err != nil { log.Fatal(err) }
 			cert = srvSelfSigned
 		default:
-			fCert, readCertErr := os.ReadFile(certPath)
-			if readCertErr != nil { log.Fatalf("Failed to read certificate file: %v", readCertErr) }
-		
-			fKey, readKeyErr := os.ReadFile(keyPath)
-			if readKeyErr != nil { log.Fatalf("Failed to read private key file: %v", readKeyErr) }
+			fCert, err := os.ReadFile(certPath)
+			if err != nil { log.Fatalf("failed to read certificate file: %v", err) }
+	
+			fKey, err := os.ReadFile(keyPath)
+			if err != nil { log.Fatalf("failed to read private key file: %v", err) }
 
-			tlsCert, getCertErr := tls.X509KeyPair(fCert, fKey)
-			if getCertErr != nil { log.Fatalf("Failed to load certificate: %v", getCertErr) }
-
+			tlsCert, err := tls.X509KeyPair(fCert, fKey)
+			if err != nil { log.Fatalf("failed to load certificate: %v", err) }
 			cert = &tlsCert
 	}
 
 	srvOpts := &srv.QuicServerOpts{ Host: host, Port: port, TlsCert: cert, EnableTracer: enableTracer }
-	server, newSrvErr := srv.NewQuicServer(srvOpts)
-	if newSrvErr != nil { log.Fatal(newSrvErr) }
+	server, err := srv.NewQuicServer(srvOpts)
+	if err != nil { log.Fatal(err) }
 
-	err := server.Listen()
+	err = server.Listen()
 	if err != nil { log.Fatal(err) }
 
 	select{}

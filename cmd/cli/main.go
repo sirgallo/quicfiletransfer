@@ -5,23 +5,23 @@ import  (
 	"log"
 	"os"
 
-	"github.com/sirgallo/quicfiletransfer/cli"
+	"github.com/sirgallo/quicfiletransfer/internal/cli"
 )
 
 
 const STREAMS = 1
 
-
 func main() {
-	homeDir, getHomeDirErr := os.UserHomeDir()
-	if getHomeDirErr != nil { log.Fatal(getHomeDirErr) }
-
-	cwd, getCwdErr := os.Getwd()
-	if getCwdErr != nil { log.Fatal(getCwdErr) }
-
+	var err error
 	var host, filename, srcFolder, dstFolder string
 	var port, cliport, streams int
 	var insecure, checkMd5 bool
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil { log.Fatal(err) }
+
+	cwd, err := os.Getwd()
+	if err != nil { log.Fatal(err) }
 
 	flag.StringVar(&host, "host", "127.0.0.1", "the host where the remote file exists")
 	flag.IntVar(&port, "port", 1234, "the port serving the file")
@@ -43,12 +43,12 @@ func main() {
 		CheckMd5: checkMd5,
 	}
 
-	client, newCliErr := cli.NewClient(cliOpts)
-	if newCliErr != nil { log.Fatal(newCliErr) }
+	client, err := cli.NewClient(cliOpts)
+	if err != nil { log.Fatal(err) }
 	
 	openOpts := &cli.OpenConnectionOpts{ Insecure: insecure }
-	path, transferErr := client.StartFileTransferStream(openOpts, filename, srcFolder, dstFolder)
-	if transferErr != nil { log.Fatal(transferErr) }
+	path, err := client.StartFileTransferStream(openOpts, filename, srcFolder, dstFolder)
+	if err != nil { log.Fatal(err) }
 	
 	log.Printf("new path: %s\n", *path)
 }

@@ -8,12 +8,12 @@ import (
 	"net"
 	"os"
 	"sync"
-
+	
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/logging"
 	"github.com/quic-go/quic-go/qlog"
 
-	"github.com/sirgallo/quicfiletransfer/common"
+	"github.com/sirgallo/quicfiletransfer/internal/common"
 )
 
 

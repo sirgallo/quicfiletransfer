@@ -9,9 +9,9 @@ import (
 
 	"github.com/quic-go/quic-go"
 
-	"github.com/sirgallo/quicfiletransfer/common"
-	"github.com/sirgallo/quicfiletransfer/common/md5"
-	"github.com/sirgallo/quicfiletransfer/common/serialize"
+	"github.com/sirgallo/quicfiletransfer/internal/common"
+	"github.com/sirgallo/quicfiletransfer/internal/common/md5"
+	"github.com/sirgallo/quicfiletransfer/internal/common/serialize"
 )
 
 

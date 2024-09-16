@@ -7,8 +7,8 @@ type QuicClientOpts struct {
 	RemoteHost string
 	// RemotePort: the port for the remote server
 	RemotePort int
-	// ClientPort: the port the client starts the udp connection with
-	ClientPort int
+	// CliPort: the port the client starts the udp connection with
+	CliPort int
 	// Streams: the number of streams the client should open (100 is default max)
 	Streams uint8
 	// CheckMD5: optionally check the md5 file to ensure validity of data
