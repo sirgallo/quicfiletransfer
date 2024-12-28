@@ -30,22 +30,22 @@ func main() {
 
 	var cert *tls.Certificate
 	switch {
-		case certPath == "" || keyPath == "":
-			srvSelfSigned, genSrvCertErr := customtls.GenerateTLSCert(ORG)
-			if genSrvCertErr != nil { log.Fatal(genSrvCertErr) }
+	case certPath == "" || keyPath == "":
+		srvSelfSigned, genSrvCertErr := customtls.GenerateTLSCert(ORG)
+		if genSrvCertErr != nil { log.Fatal(genSrvCertErr) }
+
+		cert = srvSelfSigned
+	default:
+		fCert, readCertErr := os.ReadFile(certPath)
+		if readCertErr != nil { log.Fatalf("Failed to read certificate file: %v", readCertErr) }
 	
-			cert = srvSelfSigned
-		default:
-			fCert, readCertErr := os.ReadFile(certPath)
-			if readCertErr != nil { log.Fatalf("Failed to read certificate file: %v", readCertErr) }
-		
-			fKey, readKeyErr := os.ReadFile(keyPath)
-			if readKeyErr != nil { log.Fatalf("Failed to read private key file: %v", readKeyErr) }
+		fKey, readKeyErr := os.ReadFile(keyPath)
+		if readKeyErr != nil { log.Fatalf("Failed to read private key file: %v", readKeyErr) }
 
-			tlsCert, getCertErr := tls.X509KeyPair(fCert, fKey)
-			if getCertErr != nil { log.Fatalf("Failed to load certificate: %v", getCertErr) }
+		tlsCert, getCertErr := tls.X509KeyPair(fCert, fKey)
+		if getCertErr != nil { log.Fatalf("Failed to load certificate: %v", getCertErr) }
 
-			cert = &tlsCert
+		cert = &tlsCert
 	}
 
 	srvOpts := &srv.QuicServerOpts{ Host: host, Port: port, TlsCert: cert, EnableTracer: enableTracer }

@@ -6,8 +6,6 @@ import (
 	"math/big"
 )
 
-//============================================= Serialize
-
 // Below are utility functions for serializing and deserializing primitives into and from byte arrays
 
 func SerializeBigInt(in *big.Int, totalBytes int) []byte {

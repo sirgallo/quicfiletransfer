@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-//============================================= TLS Self Signed Certs
-
 // DO NOT USE FOR PRODUCTION PURPOSES
 
 func GenerateTLSCert(org string) (*tls.Certificate, error) {

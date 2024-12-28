@@ -9,8 +9,6 @@ import (
 	"regexp"
 )
 
-//============================================= MD5
-
 // CalculateMD5
 //	Calculate MD5Checksum for the transferred file.
 //	Return back the byte array representation.

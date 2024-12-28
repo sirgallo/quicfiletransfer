@@ -14,8 +14,6 @@ import (
 	"github.com/sirgallo/quicfiletransfer/serialize"
 )
 
-//============================================= Server Handlers
-
 // handleConnection
 //	Accept multiple streams from a single connection since QUIC can multiplex streams.
 func handleConnection(conn quic.Connection) error {

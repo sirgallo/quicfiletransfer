@@ -17,8 +17,6 @@ import (
 	"github.com/sirgallo/quicfiletransfer/common"
 )
 
-//============================================= Server
-
 // QuicServerOpts: the options for the quic server on init
 type QuicServerOpts struct {
 	// Host: the host for server

@@ -1,30 +1,21 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
-	"errors"
 	"io"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
-
 	"github.com/quic-go/quic-go"
 
 	"github.com/sirgallo/quicfiletransfer/common"
-	"github.com/sirgallo/quicfiletransfer/md5"
 	"github.com/sirgallo/quicfiletransfer/serialize"
 )
-
-
-//============================================= Client
 
 // QuicClientOpts: options on client init
 type QuicClientOpts struct {
@@ -127,7 +118,6 @@ func (cli *QuicClient) StartFileTransferStream(connectOpts *OpenConnectionOpts, 
 	}
 
 	streamStartTime := time.Now()
-
 	clientWG.Add(1)
 	go func() {
 		defer clientWG.Done()
@@ -245,96 +235,6 @@ func (cli *QuicClient) openConnection(opts *OpenConnectionOpts) (quic.Connection
 	if err != nil { return nil, err }
 	log.Println("connection made with:", conn.RemoteAddr())
 	return conn, nil
-}
-
-// deserializePayload
-//	Initial metadata payload with remote filesize and md5.
-//	Format:
-//		bytes 0-7: uint64 representing the size of the file
-//		bytes 8-23: md5 in byte format
-func (cli *QuicClient) deserializeMetaPayload(payload []byte) (uint64, []byte, error) {
-	if len(payload) != common.FILE_META_PAYLOAD_MAX_LENGTH {
-		return 0, nil, errors.New("payload incorrect length")
-	}
-	remoteFileSize, err := serialize.DeserializeUint64(payload[:8])
-	if err != nil { return 0, nil, err }
-	return remoteFileSize, payload[8:], nil
-}
-
-// deserializeChunkPayload
-//	Metadata payload regarding chunk size and start offset in file.
-//	Format:
-//		bytes 0-7: uint64 representing the start offset in the file where the stream should begin processing
-//		bytes 8-16: uint64 representing the size of the chunk being received by the stream
-func (cli *QuicClient) deserializeChunkPayload(payload []byte) (uint64, uint64, error) {
-	var err error
-	if len(payload) != common.CHUNK_META_PAYLOAD_MAX_LENGTH {
-		return 0, 0, errors.New("payload incorrect length")
-	}
-	startOffset, err := serialize.DeserializeUint64(payload[:8])
-	if err != nil { return 0, 0, err }
-	chunkSize, err := serialize.DeserializeUint64(payload[8:])
-	if err != nil { return 0, 0, err }
-	return startOffset, chunkSize, nil
-}
-
-// resizeDstFile
-//	When the streams receive the metadata, the file created needs to be resized to match the size of the remote file.
-func (cli *QuicClient) resizeDstFile(isResizing *uint64, remoteFileSize int64) error {
-	var err error
-	f, err := os.OpenFile(cli.dstFile, os.O_RDWR, 0666)
-	if err != nil { return err }
-	defer f.Close()
-
-	fSize := int64(0)
-	for fSize != remoteFileSize {
-		stat, err := f.Stat()
-		if err != nil { return err }
-
-		fSize = stat.Size()
-		if atomic.CompareAndSwapUint64(isResizing, 0, 1) {				
-			err = f.Truncate(remoteFileSize)
-			if err != nil { return err }
-			break
-		}
-
-		runtime.Gosched()
-	}
-
-	return nil
-}
-
-// performMd5Check
-//	Optionally perform and md5 check on the transferred file.
-func (cli *QuicClient) performMd5Check(sourceMd5 []byte) (*string, error){
-	var err error
-	md5StartTime := time.Now()
-	log.Println("calculating md5 checksum")
-	md5Bytes, err := md5.CalculateMD5(cli.dstFile)
-	if err != nil { return nil, err }
-
-	md5EndTime := time.Now()
-	md5ElapsedTime := md5EndTime.Sub(md5StartTime)
-	log.Printf("calculated md5: %v, source md5: %v\n", md5Bytes, sourceMd5)
-	log.Println("total elapsed time for md5 calculation:", md5ElapsedTime)
-
-	if !bytes.Equal(md5Bytes, sourceMd5) {
-		err = os.Remove(cli.dstFile)
-		if err != nil { return nil, err }
-		return nil, errors.New("md5 checksums did not match")
-	}
-
-	md5File, err := os.Create(cli.dstFile + ".md5")
-	if err != nil { return nil, err }
-	defer md5File.Close()
-
-	md5Hex, err := md5.DeserializeMD5ToHex(md5Bytes)
-	if err != nil { return nil, err }
-	_, err = md5File.Write([]byte(md5Hex))
-	if err != nil { return nil, err }
-
-	log.Println("md5 check passed, done")
-	return &cli.dstFile, nil
 }
 
 const HANDSHAKE_TIMEOUT = 3
