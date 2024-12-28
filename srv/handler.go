@@ -37,7 +37,6 @@ func handleConnection(conn quic.Connection) error {
 func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
 	defer commStream.Close()
 	var err error
-
 	buf := make([]byte, common.CLIENT_PAYLOAD_MAX_LENGTH)
 	payloadLength, err := commStream.Read(buf)
 	if err != nil { 
@@ -45,7 +44,7 @@ func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
 		return err 
 	}
 
-	totalStreamsForFile := uint8(buf[0])
+	totalStreamsForFile := uint64(buf[0])
 	fileName := string(buf[1:payloadLength])
 
 	log.Printf("filename: %s, total streams for file: %d\n", fileName, totalStreamsForFile)
@@ -87,7 +86,7 @@ func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
 	}
 
 	var multiplexWG sync.WaitGroup
-	for s := range make([]uint8, totalStreamsForFile) {
+	for s := range make([]uint64, totalStreamsForFile) {
 		multiplexWG.Add(1)
 		dataStream, err := conn.OpenUniStream()
 		if err != nil {
@@ -95,15 +94,15 @@ func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
 			return err
 		}
 
-		go func(s uint8) {
+		go func(s uint64) {
 			defer multiplexWG.Done()
 			defer dataStream.Close()
 			var streamErr error
 
-			chunkSize := fileSize / uint64(totalStreamsForFile)
-			startOffset := uint64(s) * chunkSize
-			if fileSize % uint64(totalStreamsForFile) != 0 && uint8(s) == totalStreamsForFile - 1 {
-				chunkSize += fileSize % uint64(totalStreamsForFile)
+			chunkSize := fileSize / totalStreamsForFile
+			startOffset := s * chunkSize
+			if fileSize % totalStreamsForFile != 0 && s == totalStreamsForFile - 1 {
+				chunkSize += fileSize % totalStreamsForFile
 			}
 		
 			log.Printf("startOffset: %d, chunkSize: %d\n", startOffset, chunkSize)
@@ -153,7 +152,6 @@ func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
 				}
 
 				totalBytesStreamed += n
-		
 				_, streamErr = commStream.Write(serialize.SerializeUint64(uint64(n)))
 				if streamErr != nil {
 					conn.CloseWithError(common.TRANSPORT_ERROR, streamErr.Error()) 
@@ -162,7 +160,7 @@ func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
 			}
 
 			log.Println("successfully transferred chunk", s)
-		}(uint8(s))
+		}(uint64(s))
 	}
 
 	multiplexWG.Wait()

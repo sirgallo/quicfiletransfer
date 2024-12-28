@@ -56,6 +56,7 @@ func NewQuicServer(opts *QuicServerOpts) (*QuicServer, error) {
 
 		quicConfig.Tracer = tracer
 	}
+
 	var err error
 	udpConn, err := net.ListenUDP(common.NET_PROTOCOL, &net.UDPAddr{ IP: net.ParseIP(opts.Host), Port: opts.Port })
 	if err != nil { return nil, err }
@@ -78,15 +79,18 @@ func (srv *QuicServer) Listen() error {
 
 	go func() {
 		defer listenWG.Done()
+		var err error
+
 		for {
-			conn, err := srv.listener.Accept(context.Background())
+			var conn quic.EarlyConnection
+			conn, err = srv.listener.Accept(context.Background())
 			if err != nil { 
 				log.Println("connection error:", err.Error())
 				continue 
 			}
 
 			go func () {
-				err := handleConnection(conn)
+				err = handleConnection(conn)
 				if err != nil { log.Println("error on handler:", err.Error()) }
 			}()
 		}
