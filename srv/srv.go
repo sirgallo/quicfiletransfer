@@ -9,7 +9,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/logging"
 	"github.com/quic-go/quic-go/qlog"

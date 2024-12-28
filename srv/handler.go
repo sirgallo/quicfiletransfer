@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"sync"
-
 	"github.com/quic-go/quic-go"
 
 	"github.com/sirgallo/quicfiletransfer/common"
@@ -46,7 +45,6 @@ func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
 
 	totalStreamsForFile := uint64(buf[0])
 	fileName := string(buf[1:payloadLength])
-
 	log.Printf("filename: %s, total streams for file: %d\n", fileName, totalStreamsForFile)
 	
 	file, err := os.Open(fileName)
@@ -106,7 +104,6 @@ func handleCommStream(conn quic.Connection, commStream quic.Stream) error {
 			}
 		
 			log.Printf("startOffset: %d, chunkSize: %d\n", startOffset, chunkSize)
-		
 			sendPayload := func() []byte {
 				p := make([]byte, common.CHUNK_META_PAYLOAD_MAX_LENGTH)
 				copy(p[:8], serialize.SerializeUint64(startOffset))

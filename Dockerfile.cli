@@ -8,10 +8,11 @@ COPY common ./common
 COPY md5 ./md5
 COPY serialize ./serialize
 COPY tls ./tls
+COPY vendor ./vendor
 COPY go.mod \
   go.sum ./
 
-RUN go build -o quiccli ./cmd/cli/main.go
+RUN go build -mod=vendor -o quiccli ./cmd/cli/main.go
 
 EXPOSE 1235
 
