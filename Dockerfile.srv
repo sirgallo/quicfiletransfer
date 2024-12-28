@@ -5,6 +5,9 @@ WORKDIR $HOME/quicsrv
 COPY srv ./srv
 COPY cmd ./cmd
 COPY common ./common
+COPY md5 ./md5
+COPY serialize ./serialize
+COPY tls ./tls
 COPY go.mod \
   go.sum ./
 
