@@ -1,15 +1,14 @@
 package serialize
 
-import "errors"
-import "encoding/binary"
-import "math/big"
-
+import (
+	"errors"
+	"encoding/binary"
+	"math/big"
+)
 
 //============================================= Serialize
 
-
 // Below are utility functions for serializing and deserializing primitives into and from byte arrays
-
 
 func SerializeBigInt(in *big.Int, totalBytes int) []byte {
 	buf := make([]byte, totalBytes)
@@ -18,7 +17,6 @@ func SerializeBigInt(in *big.Int, totalBytes int) []byte {
 
 func DeserializeBigInt(data []byte, totalBytes int) (*big.Int, error) {
 	if len(data) != totalBytes { return nil, errors.New("invalid data length for total bytes provided") }
-	
 	num := new(big.Int)
 	num.SetBytes(data)
 	return num, nil

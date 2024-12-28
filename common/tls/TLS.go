@@ -11,12 +11,9 @@ import (
 	"time"
 )
 
-
 //============================================= TLS Self Signed Certs
 
-
 // DO NOT USE FOR PRODUCTION PURPOSES
-
 
 func GenerateTLSCert(org string) (*tls.Certificate, error) {
 	privKey, genPrivKeyErr := generatePrivateKey()
@@ -24,8 +21,7 @@ func GenerateTLSCert(org string) (*tls.Certificate, error) {
 
 	certBytes, genSelfSignedErr := createSelfSignedCert(org, privKey)
 	if genSelfSignedErr != nil { return nil, genSelfSignedErr }
-
-	return &tls.Certificate{ Certificate: [][]byte{ certBytes }, PrivateKey: privKey }, nil
+	return &tls.Certificate{Certificate: [][]byte{certBytes}, PrivateKey: privKey}, nil
 }
 
 func createSelfSignedCert(org string, privKey *ecdsa.PrivateKey) ([]byte, error) {
@@ -34,14 +30,12 @@ func createSelfSignedCert(org string, privKey *ecdsa.PrivateKey) ([]byte, error)
 
 	certBytes, certErr := x509.CreateCertificate(rand.Reader, template, template, &privKey.PublicKey, privKey)
 	if certErr != nil { return nil, certErr }
-
 	return certBytes, nil
 }
 
 func generateCertTemplate(org string) (*x509.Certificate, error) {
 	notBefore := time.Now()
 	notAfter := notBefore.Add(365 * 24 * time.Hour)
-
 	serialNumber, randErr := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if randErr != nil { return nil, randErr }
 
@@ -59,6 +53,5 @@ func generateCertTemplate(org string) (*x509.Certificate, error) {
 func generatePrivateKey() (*ecdsa.PrivateKey, error) {
 	privKey, genErr := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if genErr != nil { return nil, genErr }
-
 	return privKey, nil
 }

@@ -9,24 +9,22 @@ import (
 	"regexp"
 )
 
-
 //============================================= MD5
-
 
 // CalculateMD5
 //	Calculate MD5Checksum for the transferred file.
 //	Return back the byte array representation.
 func CalculateMD5(filePath string) ([]byte, error) {
-	f, openErr := os.OpenFile(filePath, os.O_RDONLY, 0666)
-	if openErr != nil { return nil, openErr }
+	var err error
+	f, err := os.OpenFile(filePath, os.O_RDONLY, 0666)
+	if err != nil { return nil, err }
 
-	_, seekErr := f.Seek(0, 0)
-	if seekErr != nil { return nil, seekErr }
+	_, err = f.Seek(0, 0)
+	if err != nil { return nil, err }
 
 	hash := md5.New()
-	_, generateMd5Err := io.Copy(hash, f)
-	if generateMd5Err != nil { return nil, generateMd5Err }
-
+	_, err = io.Copy(hash, f)
+	if err != nil { return nil, err }
 	return hash.Sum(nil), nil
 }
 
@@ -44,9 +42,8 @@ func SerializeMD5ToBytes(input string) ([]byte, error) {
 	controlCharRegex := regexp.MustCompile(`[\x00-\x1F\x7F]`)
 	md5 := controlCharRegex.ReplaceAllLiteralString(input, "")
 
-	md5Bytes, decodeErr := hex.DecodeString(md5)
-	if decodeErr != nil { return nil, decodeErr }
-
+	md5Bytes, err := hex.DecodeString(md5)
+	if err != nil { return nil, err }
 	return md5Bytes, nil
 }
 
@@ -54,12 +51,12 @@ func SerializeMD5ToBytes(input string) ([]byte, error) {
 //	Read a MD5Checksum from a file.
 //	The hex representation is then serialized to byte array.
 func ReadMD5FromFile(md5FilePath string) ([]byte, error) {
+	var err error
 	data, err := os.ReadFile(md5FilePath)
 	if err != nil { return nil, err }
 
-	md5Bytes, sErr := SerializeMD5ToBytes(string(data))
-	if sErr != nil { return nil, sErr }
+	md5Bytes, err := SerializeMD5ToBytes(string(data))
+	if err != nil { return nil, err }
 	if len(md5Bytes) != 16 { return nil, errors.New("md5 sum incorrect length") }
-	
 	return md5Bytes, nil
 }

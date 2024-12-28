@@ -1,9 +1,9 @@
-# QUIC File Transfer Service
+# quicfiletransfer
 
 ## a cli + srv for transferring large files
 
 
-## Design
+## design
 
 The `File Transfer Service` utilizes the [quic-go](https://github.com/quic-go/quic-go) implementation of the [quic](https://en.wikipedia.org/wiki/QUIC) Protocol, built on top of `UDP`. Since `quic` allows for multiplexing of streams on a single connection, the service takes advantage of this to attempt to speed up file transfers by processing and writing the file from the remote host (the server) to the destination (the client) concurrently.
 
@@ -13,7 +13,6 @@ A client attempts to make a connection to a host running the server implementati
 
 An optional `MD5` checksum can be calculated as well for the transferred file to verify that the content is the same as the source file. The server provides its own `MD5` for comparison once the file is written. However, this would only be an additional level of redundancy as `quic` has a reliability guarantee already built into the protocol.
 
-
 ## cmd
 
-A server and client implementation are both provided. For usage and configuration, check [CMD](./cmd/Cmd.md).
+To run the cli + srv check [cmd.md](./docs/cmd.md).

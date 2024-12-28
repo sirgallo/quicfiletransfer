@@ -8,9 +8,7 @@ import  (
 	"github.com/sirgallo/quicfiletransfer/cli"
 )
 
-
 const STREAMS = 1
-
 
 func main() {
 	homeDir, getHomeDirErr := os.UserHomeDir()
