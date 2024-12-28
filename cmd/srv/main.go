@@ -7,15 +7,12 @@ import (
 	"os"
 
 	"github.com/sirgallo/quicfiletransfer/srv"
-
 	customtls "github.com/sirgallo/quicfiletransfer/tls"
 )
-
 
 const HOST = "0.0.0.0"
 const PORT = 1234
 const ORG = "test"
-
 
 func main() {
 	var host, org, certPath, keyPath string
